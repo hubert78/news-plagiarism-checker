@@ -49,7 +49,7 @@ def scrape_all(days=3):
     try:
         print("Scraping 3News...")
         for cat in ["news", "business", "sports", "showbiz"]:
-            df_3n = new3_scraper(cat, end_date_str, start_date_str)
+            df_3n = new3_scraper(cat, "", end_date_dash)
             if df_3n is not None and not df_3n.empty:
                 all_articles.extend(df_3n.to_dict(orient='records'))
     except Exception as e:

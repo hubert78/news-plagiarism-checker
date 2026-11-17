@@ -3,13 +3,76 @@
  * Interactive card selection for news sources with pure live scraping
  */
 
-const SOURCE_CATEGORIES = {
-  "Ghanaweb": ["NewsArchive", "business", "entertainment", "africa", "SportsArchive", "features"],
-  "3News": ["news", "elections", "business", "showbiz", "sports", "health", "opinion"],
-  "MyJoyOnline": ["news", "business", "entertainment", "sports", "opinion"],
-  "Modern Ghana": ["general", "news", "business", "entertainment", "sports"],
-  "Yen Ghana": ["Ghana", "Politics", "Business", "Entertanment", "Sports", "World"]
+const STANDARD_CATEGORIES = [
+  { id: "news", label: "News" },
+  { id: "politics", label: "Politics" },
+  { id: "business", label: "Business" },
+  { id: "sports", label: "Sports" },
+  { id: "entertainment", label: "Entertainment & Showbiz" },
+  { id: "opinion", label: "Opinion & Features" }
+];
+
+const PORTAL_CATEGORY_MAP = {
+  "3News": {
+    news: ["news"],
+    business: ["business"],
+    politics: ["news"],
+    sports: ["sports"],
+    entertainment: ["showbiz"],
+    opinion: ["opinion"]
+  },
+  "MyJoyOnline": {
+    news: ["news"],
+    business: ["business"],
+    politics: ["news"],
+    sports: ["sports"],
+    entertainment: ["entertainment"],
+    opinion: ["opinion"]
+  },
+  "Ghanaweb": {
+    news: ["NewsArchive"],
+    business: ["business"],
+    politics: ["NewsArchive"],
+    sports: ["SportsArchive"],
+    entertainment: ["entertainment"],
+    opinion: ["features"]
+  },
+  "Ghana web": {
+    news: ["NewsArchive"],
+    business: ["business"],
+    politics: ["NewsArchive"],
+    sports: ["SportsArchive"],
+    entertainment: ["entertainment"],
+    opinion: ["features"]
+  },
+  "Modern Ghana": {
+    news: ["general", "news"],
+    business: ["business"],
+    politics: ["news", "general"],
+    sports: ["sports"],
+    entertainment: ["entertainment"],
+    opinion: ["general"]
+  },
+  "Yen Ghana": {
+    news: ["ghana"],
+    business: ["business"],
+    politics: ["politics", "ghana"],
+    sports: ["sports"],
+    entertainment: ["entertainment"],
+    opinion: ["ghana"]
+  }
 };
+
+function formatCategoryLabel(cat) {
+  if (!cat) return "General";
+  const lower = cat.toLowerCase();
+  if (lower === "showbiz" || lower === "entertainment") return "Entertainment";
+  if (lower === "newsarchive" || lower === "general" || lower === "ghana" || lower === "news") return "News";
+  if (lower === "sportsarchive" || lower === "sports") return "Sports";
+  if (lower === "business") return "Business";
+  if (lower === "features" || lower === "opinion") return "Opinion";
+  return cat.charAt(0).toUpperCase() + cat.slice(1);
+}
 
 function formatDate(d) {
   const y = d.getFullYear();
@@ -24,14 +87,18 @@ threeDaysAgo.setDate(today.getDate() - 3);
 
 let state = {
   articles: [],
-  source1: "Ghanaweb",
-  source2: "3News",
-  activeCategories: new Set([...SOURCE_CATEGORIES["Ghanaweb"], ...SOURCE_CATEGORIES["3News"]]),
+  source1: "3News",
+  source2: "MyJoyOnline",
+  activeCategories: new Set(["news"]),
   startDate: formatDate(today),
   endDate: formatDate(threeDaysAgo),
-  threshold: 70,
+  threshold: 10,
   activeTab: "analysis",
-  activeView: "table"
+  activeView: "charts",
+  pairsFilter: "all",
+  pairsSearch: "",
+  pairsDisplayMode: "cards",
+  lastAnalysisData: null
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -41,9 +108,24 @@ document.addEventListener("DOMContentLoaded", () => {
   initCategoryPills();
   initSliders();
   initResultTabs();
+  initPairsControls();
   initResetButton();
-  initFileUpload();
   initQuickCompare();
+
+  // Pre-load saved articles from data/articles.json if available
+  fetch("./data/articles.json")
+    .then(res => res.ok ? res.json() : [])
+    .then(data => {
+      if (Array.isArray(data) && data.length > 0) {
+        state.articles = data;
+        const s1Count = data.filter(a => a.Source === state.source1).length;
+        const s2Count = data.filter(a => a.Source === state.source2).length;
+        if (s1Count > 0 && s2Count > 0) {
+          logTerminal(`Loaded ${data.length} stored articles (${state.source1}: ${s1Count}, ${state.source2}: ${s2Count}).`, 'info');
+        }
+      }
+    })
+    .catch(() => {});
 });
 
 // Primary Tab Navigation
@@ -146,25 +228,23 @@ function initCategoryPills() {
   const container = document.getElementById("active-categories-container");
   if (!container) return;
 
-  const cats1 = SOURCE_CATEGORIES[state.source1] || [];
-  const cats2 = SOURCE_CATEGORIES[state.source2] || [];
-  const uniqueCats = Array.from(new Set([...cats1, ...cats2]));
-
-  state.activeCategories = new Set(uniqueCats);
   container.innerHTML = "";
 
-  uniqueCats.forEach(cat => {
+  STANDARD_CATEGORIES.forEach(cat => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "cat-pill active px-3 py-1 text-xs font-semibold rounded-xl border";
-    btn.textContent = cat;
+    const isActive = state.activeCategories.has(cat.id);
+    btn.className = `cat-pill ${isActive ? "active" : ""} px-3 py-1 text-xs font-semibold rounded-xl border`;
+    btn.textContent = cat.label;
 
     btn.addEventListener("click", () => {
-      if (state.activeCategories.has(cat)) {
-        state.activeCategories.delete(cat);
-        btn.classList.remove("active");
+      if (state.activeCategories.has(cat.id)) {
+        if (state.activeCategories.size > 1) {
+          state.activeCategories.delete(cat.id);
+          btn.classList.remove("active");
+        }
       } else {
-        state.activeCategories.add(cat);
+        state.activeCategories.add(cat.id);
         btn.classList.add("active");
       }
     });
@@ -176,11 +256,47 @@ function initCategoryPills() {
 function initSliders() {
   const slider = document.getElementById("threshold-slider");
   const valueDisplay = document.getElementById("threshold-value");
+  const presets = document.querySelectorAll(".btn-thresh-preset");
+
+  function updatePresetButtons(val) {
+    presets.forEach(btn => {
+      const bVal = parseInt(btn.dataset.val, 10);
+      if (bVal === val) {
+        btn.classList.add("bg-emerald-600", "text-white");
+        btn.classList.remove("bg-slate-100", "text-slate-700");
+      } else {
+        btn.classList.remove("bg-emerald-600", "text-white");
+        btn.classList.add("bg-slate-100", "text-slate-700");
+      }
+    });
+  }
+
+  function handleThresholdChange(val) {
+    state.threshold = val;
+    if (slider) slider.value = val;
+    if (valueDisplay) valueDisplay.textContent = `${val}%`;
+    updatePresetButtons(val);
+
+    if (state.lastAnalysisData) {
+      renderThresholdAnalysis();
+    }
+  }
 
   slider?.addEventListener("input", (e) => {
-    state.threshold = parseInt(e.target.value, 10);
-    if (valueDisplay) valueDisplay.textContent = `${state.threshold}%`;
+    const val = parseInt(e.target.value, 10);
+    handleThresholdChange(val);
   });
+
+  presets.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const val = parseInt(btn.dataset.val, 10);
+      if (!isNaN(val)) {
+        handleThresholdChange(val);
+      }
+    });
+  });
+
+  updatePresetButtons(state.threshold);
 }
 
 function initResultTabs() {
@@ -188,11 +304,11 @@ function initResultTabs() {
   resTabs.forEach(tab => {
     tab.addEventListener("click", () => {
       resTabs.forEach(t => {
-        t.classList.remove("active", "text-slate-900", "border-slate-900");
-        t.classList.add("text-slate-500", "border-transparent");
+        t.classList.remove("active", "bg-slate-100", "text-slate-900", "font-bold");
+        t.classList.add("text-slate-600", "font-semibold");
       });
-      tab.classList.add("active", "text-slate-900", "border-slate-900");
-      tab.classList.remove("text-slate-500", "border-transparent");
+      tab.classList.add("active", "bg-slate-100", "text-slate-900", "font-bold");
+      tab.classList.remove("text-slate-600", "font-semibold");
 
       const viewTarget = tab.dataset.view;
       state.activeView = viewTarget;
@@ -200,29 +316,147 @@ function initResultTabs() {
       document.querySelectorAll(".res-view").forEach(v => v.classList.add("hidden"));
       const activeViewEl = document.getElementById(`view-${viewTarget}`);
       if (activeViewEl) activeViewEl.classList.remove("hidden");
+
+      // Re-render charts when switching to visual charts or duplicates tab
+      if ((viewTarget === "charts" || viewTarget === "duplicates") && state.lastAnalysisData) {
+        const { s1Cleaned, s2Cleaned, s1DupInfo, s2DupInfo, betweenPairs, dataScores } = state.lastAnalysisData;
+        try {
+          if (typeof renderAnalysisCharts === "function") {
+            renderAnalysisCharts(s1Cleaned, s2Cleaned, s1DupInfo, s2DupInfo, betweenPairs.length, dataScores);
+          }
+        } catch (e) {
+          console.warn("Chart re-render error:", e);
+        }
+      }
     });
+  });
+}
+
+function initPairsControls() {
+  // Search input
+  const searchInput = document.getElementById("pairs-search-input");
+  searchInput?.addEventListener("input", (e) => {
+    state.pairsSearch = e.target.value.toLowerCase().trim();
+    applyPairsFilterAndRender();
+  });
+
+  // Severity filter buttons
+  const sevButtons = document.querySelectorAll(".filter-sev-btn");
+  sevButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      sevButtons.forEach(b => {
+        b.classList.remove("active", "bg-white", "text-slate-800", "shadow-xs");
+        b.classList.add("hover:text-slate-900");
+      });
+      btn.classList.add("active", "bg-white", "text-slate-800", "shadow-xs");
+      btn.classList.remove("hover:text-slate-900");
+
+      state.pairsFilter = btn.dataset.sev;
+      applyPairsFilterAndRender();
+    });
+  });
+
+  // View mode switcher (Cards vs Table)
+  const btnCards = document.getElementById("btn-mode-cards");
+  const btnTable = document.getElementById("btn-mode-table");
+
+  btnCards?.addEventListener("click", () => {
+    state.pairsDisplayMode = "cards";
+    btnCards.classList.add("active", "bg-white", "text-slate-800", "shadow-xs");
+    btnCards.classList.remove("text-slate-600");
+    btnTable?.classList.remove("active", "bg-white", "text-slate-800", "shadow-xs");
+    btnTable?.classList.add("text-slate-600");
+
+    document.getElementById("pairs-cards-container")?.classList.remove("hidden");
+    document.getElementById("pairs-table-container")?.classList.add("hidden");
+  });
+
+  btnTable?.addEventListener("click", () => {
+    state.pairsDisplayMode = "table";
+    btnTable.classList.add("active", "bg-white", "text-slate-800", "shadow-xs");
+    btnTable.classList.remove("text-slate-600");
+    btnCards?.classList.remove("active", "bg-white", "text-slate-800", "shadow-xs");
+    btnCards?.classList.add("text-slate-600");
+
+    document.getElementById("pairs-cards-container")?.classList.add("hidden");
+    document.getElementById("pairs-table-container")?.classList.remove("hidden");
+  });
+
+  // Export CSV
+  document.getElementById("export-results-btn")?.addEventListener("click", () => {
+    exportReportCSV();
+  });
+
+  // Zero State: Lower Threshold Button
+  document.getElementById("zero-lower-threshold-btn")?.addEventListener("click", () => {
+    const btn = document.getElementById("zero-lower-threshold-btn");
+    const targetThreshold = parseInt(btn.dataset.targetThreshold, 10);
+    if (!isNaN(targetThreshold) && targetThreshold > 0) {
+      state.threshold = targetThreshold;
+      const slider = document.getElementById("threshold-slider");
+      const valDisp = document.getElementById("threshold-value");
+      if (slider) slider.value = targetThreshold;
+      if (valDisp) valDisp.textContent = `${targetThreshold}%`;
+
+      showToast(`Threshold adjusted to ${targetThreshold}%. Re-analyzing...`, "info");
+      renderThresholdAnalysis();
+    }
   });
 }
 
 function initResetButton() {
   document.getElementById("reset-btn")?.addEventListener("click", () => {
-    state.source1 = "Ghanaweb";
-    state.source2 = "3News";
-    state.threshold = 70;
+    state.source1 = "3News";
+    state.source2 = "MyJoyOnline";
+    state.threshold = 10;
+    state.activeCategories = new Set(["news"]);
     state.articles = [];
+    state.activeView = "charts";
+    state.pairsFilter = "all";
+    state.pairsSearch = "";
+    state.pairsDisplayMode = "cards";
+    state.lastAnalysisData = null;
 
     const slider = document.getElementById("threshold-slider");
     const valDisp = document.getElementById("threshold-value");
-    if (slider) slider.value = 70;
-    if (valDisp) valDisp.textContent = "70%";
+    if (slider) slider.value = 10;
+    if (valDisp) valDisp.textContent = "10%";
+
+    const presets = document.querySelectorAll(".btn-thresh-preset");
+    presets.forEach(btn => {
+      const bVal = parseInt(btn.dataset.val, 10);
+      if (bVal === 10) {
+        btn.classList.add("bg-emerald-600", "text-white");
+        btn.classList.remove("bg-slate-100", "text-slate-700");
+      } else {
+        btn.classList.remove("bg-emerald-600", "text-white");
+        btn.classList.add("bg-slate-100", "text-slate-700");
+      }
+    });
+
+    const searchInput = document.getElementById("pairs-search-input");
+    if (searchInput) searchInput.value = "";
 
     initDateInputs();
     initSourceCards();
     initCategoryPills();
 
+    document.querySelectorAll(".res-tab").forEach(t => {
+      if (t.dataset.view === "charts") {
+        t.classList.add("active", "bg-slate-100", "text-slate-900", "font-bold");
+        t.classList.remove("text-slate-600", "font-semibold");
+      } else {
+        t.classList.remove("active", "bg-slate-100", "text-slate-900", "font-bold");
+        t.classList.add("text-slate-600", "font-semibold");
+      }
+    });
+    document.querySelectorAll(".res-view").forEach(v => v.classList.add("hidden"));
+    document.getElementById("view-charts")?.classList.remove("hidden");
+
     document.getElementById("analysis-results")?.classList.add("hidden");
     document.getElementById("live-terminal")?.classList.add("hidden");
     document.getElementById("no-results-banner")?.classList.add("hidden");
+    document.getElementById("export-results-btn")?.classList.add("hidden");
     showToast("Reset to defaults.", "info");
   });
 }
@@ -288,8 +522,26 @@ async function executeLiveScrapingAndCheck() {
 
   logTerminal(`Connecting to ${state.source1} and ${state.source2}...`);
 
-  const cats1 = (SOURCE_CATEGORIES[state.source1] || []).filter(c => state.activeCategories.has(c));
-  const cats2 = (SOURCE_CATEGORIES[state.source2] || []).filter(c => state.activeCategories.has(c));
+  const cats1 = [
+    ...new Set(
+      Array.from(state.activeCategories).flatMap(c => {
+        const val = PORTAL_CATEGORY_MAP[state.source1]?.[c];
+        if (Array.isArray(val)) return val;
+        if (val) return [val];
+        return [c];
+      })
+    )
+  ];
+  const cats2 = [
+    ...new Set(
+      Array.from(state.activeCategories).flatMap(c => {
+        const val = PORTAL_CATEGORY_MAP[state.source2]?.[c];
+        if (Array.isArray(val)) return val;
+        if (val) return [val];
+        return [c];
+      })
+    )
+  ];
 
   const payload = {
     source_1: state.source1,
@@ -316,7 +568,7 @@ async function executeLiveScrapingAndCheck() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(240000)
     });
 
     if (res.ok) {
@@ -327,9 +579,15 @@ async function executeLiveScrapingAndCheck() {
         logTerminal(`Scraped ${data.source2_count} articles from ${state.source2}.`, 'success');
         newArticles = [...(data.articles1 || []), ...(data.articles2 || [])];
       }
+    } else {
+      logTerminal(`Python scraper API responded with status ${res.status}.`, 'warn');
     }
   } catch (err) {
-    // Continue to browser scraper
+    if (err.name === 'TimeoutError') {
+      logTerminal("Python scraper API timed out (>4 min).", 'warn');
+    } else {
+      logTerminal("Python server endpoint not detected (Static / GitHub Pages mode).", 'info');
+    }
   }
 
   // 2. Client-side browser scraper fallback (GitHub Pages)
@@ -371,8 +629,39 @@ async function executeLiveScrapingAndCheck() {
     return;
   }
 
+  logTerminal(`Scraping complete. Running plagiarism analysis on ${state.articles.length} articles...`, 'info');
   showToast(`Scraped ${state.articles.length} articles. Calculating similarities...`, "success");
-  runPlagiarismCheck();
+
+  try {
+    runPlagiarismCheck();
+  } catch (err) {
+    console.error("Plagiarism analysis error:", err);
+    logTerminal(`Analysis error: ${err.message}`, 'error');
+    showToast(`Error calculating plagiarism: ${err.message}`, 'error');
+  }
+}
+
+/**
+ * Source badge and styling lookup
+ */
+const SOURCE_STYLES = {
+  "3News": { badge: "bg-sky-100 text-sky-800 border border-sky-200", border: "border-sky-300" },
+  "MyJoyOnline": { badge: "bg-amber-100 text-amber-800 border border-amber-200", border: "border-amber-300" },
+  "Ghanaweb": { badge: "bg-emerald-100 text-emerald-800 border border-emerald-200", border: "border-emerald-300" },
+  "Ghana web": { badge: "bg-emerald-100 text-emerald-800 border border-emerald-200", border: "border-emerald-300" },
+  "Modern Ghana": { badge: "bg-indigo-100 text-indigo-800 border border-indigo-200", border: "border-indigo-300" },
+  "Yen Ghana": { badge: "bg-rose-100 text-rose-800 border border-rose-200", border: "border-rose-300" }
+};
+
+function getSourceStyle(sourceName) {
+  return SOURCE_STYLES[sourceName] || { badge: "bg-slate-100 text-slate-800 border border-slate-200", border: "border-slate-300" };
+}
+
+function getSnippet(text, maxChars = 160) {
+  if (!text) return "No content preview available.";
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  return cleaned.substring(0, maxChars).trim() + "…";
 }
 
 /**
@@ -397,7 +686,7 @@ function runPlagiarismCheck() {
   if (s1Cleaned.length === 0 || s2Cleaned.length === 0) {
     if (noResultsEl) {
       noResultsEl.classList.remove("hidden");
-      noResultsEl.querySelector("p").textContent = 
+      noResultsEl.querySelector("p").textContent =
         `Need articles from both sources to compare. Found ${s1Cleaned.length} from ${state.source1} and ${s2Cleaned.length} from ${state.source2}.`;
     }
     return;
@@ -410,92 +699,470 @@ function runPlagiarismCheck() {
   const tfidfMatrix = vectorizer.fitTransform(processedDocs);
   const simMatrix = NLP.computeCosineSimilarity(tfidfMatrix);
 
+  // Compute all cross-source pairs directly from simMatrix
+  const s1Len = s1Cleaned.length;
+  const totalLen = combinedArticles.length;
+  const allCrossPairs = [];
+  let maxCrossScore = 0;
+
+  for (let i = 0; i < s1Len; i++) {
+    for (let j = s1Len; j < totalLen; j++) {
+      const score = simMatrix[i][j];
+      if (score > maxCrossScore) maxCrossScore = score;
+      allCrossPairs.push({ i, j, score });
+    }
+  }
+
+  allCrossPairs.sort((a, b) => b.score - a.score);
+
+  // Cache data for real-time slider threshold adjustment, filtering, and export
+  state.lastAnalysisData = {
+    combinedArticles,
+    s1Cleaned,
+    s2Cleaned,
+    s1DupInfo,
+    s2DupInfo,
+    simMatrix,
+    allCrossPairs,
+    maxCrossScore,
+    betweenPairs: [],
+    closestBelow: [],
+    dataScores: null
+  };
+
+  // Perform threshold analysis and UI rendering
+  renderThresholdAnalysis();
+
+  // On analysis completion, start on Visual Charts
+  state.activeView = "charts";
+  document.querySelectorAll(".res-tab").forEach(t => {
+    if (t.dataset.view === "charts") {
+      t.classList.add("active", "bg-slate-100", "text-slate-900", "font-bold");
+      t.classList.remove("text-slate-600", "font-semibold");
+    } else {
+      t.classList.remove("active", "bg-slate-100", "text-slate-900", "font-bold");
+      t.classList.add("text-slate-600", "font-semibold");
+    }
+  });
+  document.querySelectorAll(".res-view").forEach(v => v.classList.add("hidden"));
+  document.getElementById("view-charts")?.classList.remove("hidden");
+
+  if (resultsEl) resultsEl.classList.remove("hidden");
+  resultsEl.scrollIntoView({ behavior: "smooth" });
+
+  const terminalBadge = document.getElementById("terminal-badge");
+  if (terminalBadge) {
+    terminalBadge.className = "inline-flex items-center gap-1.5 text-emerald-400 text-[11px] font-bold";
+    terminalBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Completed';
+  }
+
+  const numPlagiarized = state.lastAnalysisData?.betweenPairs?.length || 0;
+  logTerminal(
+    numPlagiarized > 0
+      ? `Analysis complete: Found ${numPlagiarized} suspect article pair(s) above ${state.threshold}% threshold.`
+      : `Analysis complete: 0 plagiarized articles found (peak similarity: ${(maxCrossScore * 100).toFixed(1)}%).`,
+    numPlagiarized > 0 ? 'warn' : 'success'
+  );
+}
+
+/**
+ * Real-time Threshold Re-analysis & Render
+ * Dynamically re-filters cached cross-source similarity matrix in <1ms
+ */
+function renderThresholdAnalysis() {
+  if (!state.lastAnalysisData) return;
+
+  const {
+    combinedArticles,
+    s1Cleaned,
+    s2Cleaned,
+    s1DupInfo,
+    s2DupInfo,
+    simMatrix,
+    allCrossPairs,
+    maxCrossScore
+  } = state.lastAnalysisData;
+
   const thresholdVal = state.threshold / 100.0;
+  const betweenPairs = allCrossPairs.filter(p => p.score >= thresholdVal);
+  const closestBelow = allCrossPairs.filter(p => p.score < thresholdVal).slice(0, 3);
+  const numPlagiarized = betweenPairs.length;
   const dataScores = NLP.checkSimilarityScores(thresholdVal, simMatrix, combinedArticles);
 
-  const pairKey1 = `${state.source1}__${state.source2}`;
-  const pairKey2 = `${state.source2}__${state.source1}`;
-  const betweenPairs = dataScores.betweenSourcePairs[pairKey1] || dataScores.betweenSourcePairs[pairKey2] || [];
-  const numPlagiarized = betweenPairs.length;
+  state.lastAnalysisData.betweenPairs = betweenPairs;
+  state.lastAnalysisData.closestBelow = closestBelow;
+  state.lastAnalysisData.dataScores = dataScores;
 
-  // Update Summary Banner
+  // Sync Slider UI and Preset Buttons
+  const slider = document.getElementById("threshold-slider");
+  const valueDisplay = document.getElementById("threshold-value");
+  if (slider && parseInt(slider.value, 10) !== state.threshold) {
+    slider.value = state.threshold;
+  }
+  if (valueDisplay) {
+    valueDisplay.textContent = `${state.threshold}%`;
+  }
+
+  const presets = document.querySelectorAll(".btn-thresh-preset");
+  presets.forEach(btn => {
+    const bVal = parseInt(btn.dataset.val, 10);
+    if (bVal === state.threshold) {
+      btn.classList.add("bg-emerald-600", "text-white");
+      btn.classList.remove("bg-slate-100", "text-slate-700");
+    } else {
+      btn.classList.remove("bg-emerald-600", "text-white");
+      btn.classList.add("bg-slate-100", "text-slate-700");
+    }
+  });
+
+  // Update Dynamic Hero Banner
+  const banner = document.getElementById("results-hero-banner");
+  const statusBadge = document.getElementById("results-status-badge");
   const titleCountEl = document.getElementById("report-title-count");
-  if (titleCountEl) titleCountEl.textContent = `${numPlagiarized} Plagiarized Article${numPlagiarized === 1 ? '' : 's'} Found`;
+  const reportSubtitle = document.getElementById("report-subtitle");
 
+  if (numPlagiarized > 0) {
+    if (banner) {
+      banner.className = "bg-slate-900 border border-rose-500/50 rounded-2xl p-5 sm:p-6 transition-all duration-300 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4";
+    }
+    if (statusBadge) {
+      statusBadge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30";
+      statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> Plagiarism Detected';
+    }
+    if (titleCountEl) {
+      titleCountEl.textContent = `${numPlagiarized} Suspect Pair${numPlagiarized === 1 ? '' : 's'}`;
+    }
+    if (reportSubtitle) {
+      reportSubtitle.textContent = `Article pairs exceeding the ${state.threshold}% similarity threshold.`;
+    }
+  } else {
+    if (banner) {
+      banner.className = "bg-slate-900 border border-emerald-500/40 rounded-2xl p-5 sm:p-6 transition-all duration-300 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4";
+    }
+    if (statusBadge) {
+      statusBadge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      statusBadge.innerHTML = '<svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Clean Scan';
+    }
+    if (titleCountEl) {
+      titleCountEl.textContent = "0 Plagiarized Articles Found";
+    }
+    if (reportSubtitle) {
+      reportSubtitle.textContent = `All cross-source comparisons scored below ${state.threshold}%.`;
+    }
+  }
+
+  // Summary pills in hero
   const s1Pill = document.getElementById("s1-summary-pill");
   const s2Pill = document.getElementById("s2-summary-pill");
-  if (s1Pill) s1Pill.textContent = `${state.source1}: ${s1Cleaned.length} articles`;
-  if (s2Pill) s2Pill.textContent = `${state.source2}: ${s2Cleaned.length} articles`;
+  if (s1Pill) {
+    s1Pill.textContent = `${state.source1}: ${s1Cleaned.length}`;
+    s1Pill.className = "text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 px-2.5 py-1 rounded-lg";
+  }
+  if (s2Pill) {
+    s2Pill.textContent = `${state.source2}: ${s2Cleaned.length}`;
+    s2Pill.className = "text-xs font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/25 px-2.5 py-1 rounded-lg";
+  }
+
+  // Update KPI Cards
+  const kpiTotal = document.getElementById("kpi-total-articles");
+  const kpiSources = document.getElementById("kpi-sources-breakdown");
+  const kpiPairs = document.getElementById("kpi-plagiarized-count");
+  const kpiPairsIcon = document.getElementById("kpi-pairs-icon");
+  const kpiPeak = document.getElementById("kpi-peak-score");
+  const kpiThresh = document.getElementById("kpi-threshold-level");
+
+  if (kpiTotal) kpiTotal.textContent = combinedArticles.length;
+  if (kpiSources) kpiSources.textContent = `${state.source1} (${s1Cleaned.length}) vs ${state.source2} (${s2Cleaned.length})`;
+  if (kpiPairs) {
+    kpiPairs.textContent = numPlagiarized;
+    kpiPairs.className = `text-2xl font-black ${numPlagiarized > 0 ? 'text-rose-600' : 'text-emerald-600'}`;
+  }
+  if (kpiPairsIcon) {
+    kpiPairsIcon.className = `w-4 h-4 ${numPlagiarized > 0 ? 'text-rose-600' : 'text-emerald-600'}`;
+  }
+  if (kpiPeak) kpiPeak.textContent = `${(maxCrossScore * 100).toFixed(1)}%`;
+  if (kpiThresh) kpiThresh.textContent = `${state.threshold}%`;
 
   const badgeTab = document.getElementById("tab-pairs-badge");
   if (badgeTab) badgeTab.textContent = numPlagiarized;
 
-  // Render Charts & Tables
-  renderAnalysisCharts(s1Cleaned, s2Cleaned, s1DupInfo, s2DupInfo, numPlagiarized, dataScores);
-  renderPlagiarizedTable(betweenPairs, combinedArticles);
-  renderWithinSourceTables(dataScores.withinSourcePairs, combinedArticles);
+  const badgeDups = document.getElementById("tab-dups-badge");
+  if (badgeDups) badgeDups.textContent = (s1DupInfo.duplicates || 0) + (s2DupInfo.duplicates || 0);
 
-  if (resultsEl) resultsEl.classList.remove("hidden");
-  resultsEl.scrollIntoView({ behavior: "smooth" });
+  const exportBtn = document.getElementById("export-results-btn");
+  if (exportBtn) {
+    if (numPlagiarized > 0) exportBtn.classList.remove("hidden");
+    else exportBtn.classList.add("hidden");
+  }
+
+  // Handle Display: Zero State vs Detected Pairs
+  const zeroCard = document.getElementById("zero-results-card");
+  const toolbar = document.getElementById("pairs-toolbar");
+  const cardsContainer = document.getElementById("pairs-cards-container");
+  const tableContainer = document.getElementById("pairs-table-container");
+
+  if (numPlagiarized === 0) {
+    if (zeroCard) zeroCard.classList.remove("hidden");
+    if (toolbar) toolbar.classList.add("hidden");
+    if (cardsContainer) cardsContainer.classList.add("hidden");
+    if (tableContainer) tableContainer.classList.add("hidden");
+
+    const zeroDesc = document.getElementById("zero-state-description");
+    if (zeroDesc) {
+      const s1Len = s1Cleaned.length;
+      const totalLen = combinedArticles.length;
+      const comparisonsCount = (s1Len * (totalLen - s1Len)).toLocaleString();
+      zeroDesc.textContent = `${comparisonsCount} comparisons evaluated — all below ${state.threshold}%.`;
+    }
+
+    const zeroHighest = document.getElementById("zero-highest-score");
+    if (zeroHighest) {
+      zeroHighest.textContent = `${(maxCrossScore * 100).toFixed(1)}%`;
+    }
+
+    const actionBox = document.getElementById("zero-state-action-box");
+    const lowerBtn = document.getElementById("zero-lower-threshold-btn");
+    const btnLabel = document.getElementById("zero-btn-label");
+
+    const peakPctInt = Math.floor(maxCrossScore * 100);
+    if (maxCrossScore >= 0.10 && peakPctInt < state.threshold) {
+      const suggestedThreshold = Math.max(10, peakPctInt);
+      if (actionBox) actionBox.classList.remove("hidden");
+      if (lowerBtn) lowerBtn.dataset.targetThreshold = suggestedThreshold;
+      if (btnLabel) btnLabel.textContent = `Set Threshold to ${suggestedThreshold}% & Re-analyze`;
+    } else if (actionBox) {
+      actionBox.classList.add("hidden");
+    }
+
+    // Render closest matches preview section
+    const closestSection = document.getElementById("closest-matches-section");
+    const closestContainer = document.getElementById("closest-matches-container");
+
+    if (closestBelow.length > 0) {
+      if (closestSection) closestSection.classList.remove("hidden");
+      if (closestContainer) {
+        closestContainer.innerHTML = "";
+        closestBelow.forEach(p => {
+          const art1 = combinedArticles[p.i];
+          const art2 = combinedArticles[p.j];
+          const pct = (p.score * 100).toFixed(1);
+
+          const item = document.createElement("div");
+          item.className = "bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs hover:border-slate-300 transition-colors";
+          item.innerHTML = `
+            <div class="space-y-1.5 max-w-xl">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                  ${pct}% Similarity
+                </span>
+                <span class="text-[11px] font-semibold text-slate-400">
+                  <span class="font-bold text-slate-600">${art1.Source}</span> &harr; <span class="font-bold text-slate-600">${art2.Source}</span>
+                </span>
+              </div>
+              <div class="text-xs font-bold text-slate-900 leading-snug">
+                <span class="font-normal text-slate-400 mr-1">${art1.Source}:</span> ${DiffViewer.escapeHtml(art1.Title || 'Untitled')}
+              </div>
+              <div class="text-xs text-slate-600 font-medium leading-snug">
+                <span class="font-normal text-slate-400 mr-1">${art2.Source}:</span> ${DiffViewer.escapeHtml(art2.Title || 'Untitled')}
+              </div>
+            </div>
+            <button type="button" class="btn-inspect-closest self-start sm:self-auto px-3.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors">
+              Inspect
+            </button>
+          `;
+
+          item.querySelector(".btn-inspect-closest")?.addEventListener("click", () => {
+            openDiffModal(art1, art2, p.score);
+          });
+
+          closestContainer.appendChild(item);
+        });
+      }
+    } else if (closestSection) {
+      closestSection.classList.add("hidden");
+    }
+  } else {
+    if (zeroCard) zeroCard.classList.add("hidden");
+    if (toolbar) toolbar.classList.remove("hidden");
+    applyPairsFilterAndRender();
+  }
+
+  // Render Charts & Tables defensively
+  try {
+    if (typeof renderAnalysisCharts === "function") {
+      renderAnalysisCharts(s1Cleaned, s2Cleaned, s1DupInfo, s2DupInfo, numPlagiarized, dataScores);
+    }
+  } catch (chartErr) {
+    console.warn("Chart rendering failed:", chartErr);
+  }
+
+  try {
+    renderWithinSourceTables(dataScores.withinSourcePairs, combinedArticles);
+  } catch (tableErr) {
+    console.warn("Within-source tables rendering failed:", tableErr);
+  }
 }
 
-function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numPlagiarized, dataScores) {
-  const s1Plagiarized = Math.min(numPlagiarized, s1Articles.length);
-  const s1Unplagiarized = Math.max(0, s1Articles.length - s1Plagiarized);
-  ChartManager.renderPieChart("chart-proportion-s1", state.source1, {
-    "Plagiarized": s1Plagiarized,
-    "Original": s1Unplagiarized
-  }, 'plagiarism');
+function applyPairsFilterAndRender() {
+  if (!state.lastAnalysisData) return;
 
-  const s2Plagiarized = Math.min(numPlagiarized, s2Articles.length);
-  const s2Unplagiarized = Math.max(0, s2Articles.length - s2Plagiarized);
-  ChartManager.renderPieChart("chart-proportion-s2", state.source2, {
-    "Plagiarized": s2Plagiarized,
-    "Original": s2Unplagiarized
-  }, 'plagiarism');
+  const { betweenPairs, combinedArticles } = state.lastAnalysisData;
+  let filtered = [...betweenPairs];
 
-  ChartManager.renderBarChart("chart-categories-s1", state.source1, dataScores.source1Categories || {}, '#16a34a');
-  ChartManager.renderBarChart("chart-categories-s2", state.source2, dataScores.source2Categories || {}, '#0284c7');
-
-  const withinPairs = dataScores.withinSourcePairs || {};
-  const s1Similar = (withinPairs[state.source1] || []).length;
-  const s2Similar = (withinPairs[state.source2] || []).length;
-
-  ChartManager.renderPieChart("chart-similar-s1", state.source1, {
-    "Similar": s1Similar,
-    "Distinct": Math.max(0, s1Articles.length - s1Similar)
-  }, 'similar');
-
-  ChartManager.renderPieChart("chart-similar-s2", state.source2, {
-    "Similar": s2Similar,
-    "Distinct": Math.max(0, s2Articles.length - s2Similar)
-  }, 'similar');
-
-  const s1DupCard = document.getElementById("dup-url-s1-container");
-  const s2DupCard = document.getElementById("dup-url-s2-container");
-
-  if (s1DupInfo.duplicates > 0) {
-    if (s1DupCard) s1DupCard.classList.remove("hidden");
-    ChartManager.renderPieChart("chart-dup-s1", state.source1, {
-      "Duplicate": s1DupInfo.duplicates,
-      "Unique": s1Articles.length
-    }, 'dup');
-  } else if (s1DupCard) {
-    s1DupCard.classList.add("hidden");
+  // Severity filter
+  if (state.pairsFilter === "critical") {
+    filtered = filtered.filter(p => p.score >= 0.70);
+  } else if (state.pairsFilter === "moderate") {
+    filtered = filtered.filter(p => p.score >= 0.35 && p.score < 0.70);
+  } else if (state.pairsFilter === "low") {
+    filtered = filtered.filter(p => p.score < 0.35);
   }
 
-  if (s2DupInfo.duplicates > 0) {
-    if (s2DupCard) s2DupCard.classList.remove("hidden");
-    ChartManager.renderPieChart("chart-dup-s2", state.source2, {
-      "Duplicate": s2DupInfo.duplicates,
-      "Unique": s2Articles.length
-    }, 'dup');
-  } else if (s2DupCard) {
-    s2DupCard.classList.add("hidden");
+  // Keyword search
+  if (state.pairsSearch) {
+    const q = state.pairsSearch;
+    filtered = filtered.filter(p => {
+      const art1 = combinedArticles[p.i];
+      const art2 = combinedArticles[p.j];
+      const text1 = `${art1.Title || ''} ${art1.Category || ''} ${art1.Content || ''}`.toLowerCase();
+      const text2 = `${art2.Title || ''} ${art2.Category || ''} ${art2.Content || ''}`.toLowerCase();
+      return text1.includes(q) || text2.includes(q);
+    });
   }
 
-  ChartManager.renderHorizontalBarChart("chart-dates-s1", state.source1, dataScores.source1DateCount || {}, '#16a34a');
-  ChartManager.renderHorizontalBarChart("chart-dates-s2", state.source2, dataScores.source2DateCount || {}, '#0284c7');
+  renderPairsCards(filtered, combinedArticles);
+  renderPlagiarizedTable(filtered, combinedArticles);
+
+  const cardsContainer = document.getElementById("pairs-cards-container");
+  const tableContainer = document.getElementById("pairs-table-container");
+
+  if (state.pairsDisplayMode === "cards") {
+    cardsContainer?.classList.remove("hidden");
+    tableContainer?.classList.add("hidden");
+  } else {
+    cardsContainer?.classList.add("hidden");
+    tableContainer?.classList.remove("hidden");
+  }
+}
+
+function renderPairsCards(pairs, articles) {
+  const container = document.getElementById("pairs-cards-container");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (pairs.length === 0) {
+    container.innerHTML = `
+      <div class="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-slate-500 text-xs">
+        No article pairs match your active search or filter criteria.
+      </div>
+    `;
+    return;
+  }
+
+  pairs.forEach(pair => {
+    const art1 = articles[pair.i];
+    const art2 = articles[pair.j];
+    const pct = (pair.score * 100).toFixed(1);
+    const isHigh = pair.score >= 0.70;
+    const isModerate = pair.score >= 0.35 && pair.score < 0.70;
+
+    const s1Style = getSourceStyle(art1.Source);
+    const s2Style = getSourceStyle(art2.Source);
+
+    const scoreBadgeClass = isHigh
+      ? "bg-red-50 text-red-700 border border-red-200"
+      : (isModerate ? "bg-amber-50 text-amber-800 border border-amber-200" : "bg-slate-100 text-slate-700 border border-slate-200");
+
+    const meterBarClass = isHigh ? "bg-red-600" : (isModerate ? "bg-amber-500" : "bg-slate-400");
+    const riskLabel = isHigh ? "High Overlap" : (isModerate ? "Moderate Overlap" : "Low Similarity");
+
+    const card = document.createElement("div");
+    card.className = "pair-card bg-white rounded-3xl border border-slate-200/90 shadow-sm p-5 sm:p-6 space-y-4";
+    card.innerHTML = `
+      <!-- Card Header: Score Meter & Categories -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${scoreBadgeClass}">
+            ${pct}% &bull; ${riskLabel}
+          </span>
+          <div class="hidden sm:block w-28 bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div class="h-full ${meterBarClass} rounded-full" style="width: ${pct}%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+          <span>${formatCategoryLabel(art1.Category)}</span>
+          <span>&harr;</span>
+          <span>${formatCategoryLabel(art2.Category)}</span>
+        </div>
+      </div>
+
+      <!-- Comparative Columns -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Source 1 Article -->
+        <div class="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/60 flex flex-col justify-between space-y-2.5">
+          <div>
+            <div class="flex items-center justify-between text-[11px] mb-1.5">
+              <span class="font-bold px-2 py-0.5 rounded-md ${s1Style.badge}">${art1.Source}</span>
+              <span class="text-slate-400 font-medium">${art1["Date Posted"] || '-'}</span>
+            </div>
+            <h4 class="font-bold text-slate-900 text-xs sm:text-sm leading-snug">
+              ${DiffViewer.escapeHtml(art1.Title || 'Untitled')}
+            </h4>
+            <p class="text-slate-500 text-[11px] leading-relaxed mt-2 line-clamp-3">
+              ${DiffViewer.escapeHtml(getSnippet(art1.Content, 160))}
+            </p>
+          </div>
+          <div class="pt-2 border-t border-slate-200/50 flex items-center justify-between text-[11px]">
+            <a href="${art1.URL}" target="_blank" rel="noopener noreferrer" class="text-emerald-700 hover:text-emerald-800 font-bold hover:underline inline-flex items-center gap-1">
+              <span>Read original</span>
+              <span>&nearr;</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Source 2 Article -->
+        <div class="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/60 flex flex-col justify-between space-y-2.5">
+          <div>
+            <div class="flex items-center justify-between text-[11px] mb-1.5">
+              <span class="font-bold px-2 py-0.5 rounded-md ${s2Style.badge}">${art2.Source}</span>
+              <span class="text-slate-400 font-medium">${art2["Date Posted"] || '-'}</span>
+            </div>
+            <h4 class="font-bold text-slate-900 text-xs sm:text-sm leading-snug">
+              ${DiffViewer.escapeHtml(art2.Title || 'Untitled')}
+            </h4>
+            <p class="text-slate-500 text-[11px] leading-relaxed mt-2 line-clamp-3">
+              ${DiffViewer.escapeHtml(getSnippet(art2.Content, 160))}
+            </p>
+          </div>
+          <div class="pt-2 border-t border-slate-200/50 flex items-center justify-between text-[11px]">
+            <a href="${art2.URL}" target="_blank" rel="noopener noreferrer" class="text-sky-700 hover:text-sky-800 font-bold hover:underline inline-flex items-center gap-1">
+              <span>Read original</span>
+              <span>&nearr;</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex items-center justify-between pt-1">
+        <span class="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Direct text overlap detected
+        </span>
+        <button type="button" class="btn-inspect-diff px-4 py-2 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          <span>Inspect Comparison</span>
+        </button>
+      </div>
+    `;
+
+    card.querySelector(".btn-inspect-diff")?.addEventListener("click", () => {
+      openDiffModal(art1, art2, pair.score);
+    });
+
+    container.appendChild(card);
+  });
 }
 
 function renderPlagiarizedTable(pairs, articles) {
@@ -505,31 +1172,35 @@ function renderPlagiarizedTable(pairs, articles) {
   tbody.innerHTML = "";
 
   if (pairs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400 font-medium">No plagiarized articles detected above ${state.threshold}% threshold.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400 font-medium">No plagiarized articles match active filters.</td></tr>`;
     return;
   }
-
-  pairs.sort((a, b) => b.score - a.score);
 
   pairs.forEach(pair => {
     const art1 = articles[pair.i];
     const art2 = articles[pair.j];
     const pct = (pair.score * 100).toFixed(1);
 
+    const s1Style = getSourceStyle(art1.Source);
+    const s2Style = getSourceStyle(art2.Source);
+
+    const isHigh = pair.score >= 0.70;
+    const isModerate = pair.score >= 0.35 && pair.score < 0.70;
+
     const tr = document.createElement("tr");
     tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
     tr.innerHTML = `
       <td class="px-4 py-3.5 whitespace-nowrap">
-        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-extrabold ${pair.score >= 0.85 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-extrabold ${isHigh ? 'bg-red-50 text-red-700 border border-red-200' : (isModerate ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200')}">
           ${pct}%
         </span>
       </td>
       <td class="px-4 py-3.5">
         <div class="font-bold text-slate-900 leading-snug">${DiffViewer.escapeHtml(art1.Title || 'Untitled')}</div>
         <div class="text-[11px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
-          <span class="text-emerald-700 font-bold">${art1.Source}</span>
+          <span class="font-bold px-1.5 py-0.2 rounded ${s1Style.badge}">${art1.Source}</span>
           <span>&middot;</span>
-          <span>${art1.Category || '-'}</span>
+          <span>${formatCategoryLabel(art1.Category)}</span>
           <span>&middot;</span>
           <span>${art1["Date Posted"] || '-'}</span>
           <a href="${art1.URL}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 font-semibold hover:underline">Link ↗</a>
@@ -538,9 +1209,9 @@ function renderPlagiarizedTable(pairs, articles) {
       <td class="px-4 py-3.5">
         <div class="font-bold text-slate-900 leading-snug">${DiffViewer.escapeHtml(art2.Title || 'Untitled')}</div>
         <div class="text-[11px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
-          <span class="text-sky-700 font-bold">${art2.Source}</span>
+          <span class="font-bold px-1.5 py-0.2 rounded ${s2Style.badge}">${art2.Source}</span>
           <span>&middot;</span>
-          <span>${art2.Category || '-'}</span>
+          <span>${formatCategoryLabel(art2.Category)}</span>
           <span>&middot;</span>
           <span>${art2["Date Posted"] || '-'}</span>
           <a href="${art2.URL}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 font-semibold hover:underline">Link ↗</a>
@@ -553,12 +1224,57 @@ function renderPlagiarizedTable(pairs, articles) {
       </td>
     `;
 
-    tr.querySelector(".compare-btn").addEventListener("click", () => {
+    tr.querySelector(".compare-btn")?.addEventListener("click", () => {
       openDiffModal(art1, art2, pair.score);
     });
 
     tbody.appendChild(tr);
   });
+}
+
+function exportReportCSV() {
+  if (!state.lastAnalysisData || !state.lastAnalysisData.betweenPairs) {
+    showToast("No analysis data available to export.", "warning");
+    return;
+  }
+
+  const { betweenPairs, combinedArticles } = state.lastAnalysisData;
+  if (betweenPairs.length === 0) {
+    showToast("No plagiarized article pairs above threshold to export.", "info");
+    return;
+  }
+
+  const headers = ["Similarity Score", "Source 1", "Source 1 Title", "Source 1 Date", "Source 1 Category", "Source 1 URL", "Source 2", "Source 2 Title", "Source 2 Date", "Source 2 Category", "Source 2 URL"];
+  const rows = [headers];
+
+  betweenPairs.forEach(p => {
+    const a1 = combinedArticles[p.i];
+    const a2 = combinedArticles[p.j];
+    const scorePct = (p.score * 100).toFixed(1) + "%";
+    rows.push([
+      `"${scorePct}"`,
+      `"${(a1.Source || '').replace(/"/g, '""')}"`,
+      `"${(a1.Title || '').replace(/"/g, '""')}"`,
+      `"${(a1["Date Posted"] || '').replace(/"/g, '""')}"`,
+      `"${(a1.Category || '').replace(/"/g, '""')}"`,
+      `"${(a1.URL || '').replace(/"/g, '""')}"`,
+      `"${(a2.Source || '').replace(/"/g, '""')}"`,
+      `"${(a2.Title || '').replace(/"/g, '""')}"`,
+      `"${(a2["Date Posted"] || '').replace(/"/g, '""')}"`,
+      `"${(a2.Category || '').replace(/"/g, '""')}"`,
+      `"${(a2.URL || '').replace(/"/g, '""')}"`
+    ]);
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8," + rows.map(r => r.join(",")).join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `plagiarism_report_${state.source1}_vs_${state.source2}_${state.startDate}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("Plagiarism report exported to CSV.", "success");
 }
 
 function renderWithinSourceTables(withinPairs, articles) {
@@ -677,58 +1393,6 @@ function initQuickCompare() {
     document.getElementById("quick-diff-a").innerHTML = diff.htmlA;
     document.getElementById("quick-diff-b").innerHTML = diff.htmlB;
   });
-}
-
-function initFileUpload() {
-  const fileInput = document.getElementById("dataset-file-input");
-  fileInput?.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const text = event.target.result;
-        let parsed = [];
-
-        if (file.name.endsWith(".json")) {
-          parsed = JSON.parse(text);
-        } else if (file.name.endsWith(".csv")) {
-          parsed = parseCSV(text);
-        }
-
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          state.articles = parsed;
-          showToast(`Loaded ${parsed.length} articles from file.`, "success");
-          document.querySelector('[data-tab="analysis"]')?.click();
-          runPlagiarismCheck();
-        } else {
-          showToast("Invalid file format.", "warning");
-        }
-      } catch (err) {
-        showToast("Error parsing file: " + err.message, "error");
-      }
-    };
-    reader.readAsText(file);
-  });
-}
-
-function parseCSV(csvText) {
-  const lines = csvText.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (lines.length < 2) return [];
-
-  const headers = lines[0].split(",").map(h => h.trim().replace(/^["']|["']$/g, ""));
-  const records = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i].split(",").map(c => c.trim().replace(/^["']|["']$/g, ""));
-    const obj = {};
-    headers.forEach((h, idx) => {
-      obj[h] = row[idx] || "";
-    });
-    records.push(obj);
-  }
-  return records;
 }
 
 function showToast(message, type = "info") {

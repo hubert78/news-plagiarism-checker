@@ -228,12 +228,28 @@ async function scrape3News(category, startDate, endDate, onProgress) {
   try {
     const html = await fetchWithProxy(url);
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('h2.entry-title a, h3.entry-title a, article h3 a, .td-module-title a')).slice(0, 6);
+    let articleEls = Array.from(doc.querySelectorAll('article'));
+    if (articleEls.length === 0) {
+      articleEls = Array.from(doc.querySelectorAll('h2.entry-title, h3.entry-title, .td-module-title'));
+    }
 
-    for (const a of links) {
-      const title = a.textContent.trim();
-      const href = a.getAttribute('href');
+    for (const art of articleEls.slice(0, 10)) {
+      const h = art.querySelector('h1, h2, h3, h4');
+      let a = h ? h.querySelector('a') : null;
+      if (!a) {
+        a = Array.from(art.querySelectorAll('a[href]')).find(cand => {
+          const hRef = cand.getAttribute('href');
+          return hRef && !hRef.endsWith('/news') && !hRef.endsWith('/news/') && hRef !== '#' && hRef.length > 6;
+        });
+      }
+      if (!a) continue;
+
+      const title = (h ? h.textContent : a.textContent).trim();
+      let href = a.getAttribute('href');
       if (!href || !title || title.length < 10) continue;
+      if (!href.startsWith('http')) {
+        href = new URL(href, 'https://3news.com').href;
+      }
 
       onProgress(`3News: Fetching "${title.slice(0, 40)}..."`);
       try {

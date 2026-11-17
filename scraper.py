@@ -125,16 +125,17 @@ def ghanaweb_scraper(category, end_date_str, start_date_str=None):
         start_date = datetime.today().date()
 
     cur_date = start_date
+    session = requests.Session()
+    session.headers.update(get_user_agent())
 
     while cur_date >= end_date:
         date_posted = cur_date.strftime('%Y%m%d')
-        headers = get_user_agent()
         archive_url = f'https://www.ghanaweb.com/GhanaHomePage/{category}/browse.archive.php?date={date_posted}'
 
         print(f"[Ghanaweb] Scraping {category} on {date_posted} ({archive_url})")
 
         try:
-            res = requests.get(archive_url, headers=headers, timeout=10)
+            res = session.get(archive_url, timeout=10)
         except Exception as e:
             print(f"[Ghanaweb] Connection error on {archive_url}: {e}")
             cur_date -= timedelta(days=1)
@@ -160,7 +161,7 @@ def ghanaweb_scraper(category, end_date_str, start_date_str=None):
                 seen_urls.add(abs_url)
 
                 try:
-                    art_res = requests.get(abs_url, headers=get_user_agent(), timeout=8)
+                    art_res = session.get(abs_url, timeout=8)
                     if art_res.status_code == 200:
                         art_soup = BeautifulSoup(art_res.text, 'html.parser')
                         content = extract_article_content(art_soup)
@@ -208,16 +209,17 @@ def modernghana_scraper(end_date_str, start_date_str=None):
         start_date = datetime.today().date()
 
     cur_date = start_date
+    session = requests.Session()
+    session.headers.update(get_user_agent())
 
     while cur_date >= end_date:
         date_posted = cur_date.strftime('%Y%m%d')
-        headers = get_user_agent()
         archive_url = f'https://www.modernghana.com/archive/{date_posted}/'
 
         print(f"[Modern Ghana] Scraping archive on {date_posted} ({archive_url})")
 
         try:
-            res = requests.get(archive_url, headers=headers, timeout=10)
+            res = session.get(archive_url, timeout=10)
         except Exception as e:
             print(f"[Modern Ghana] Connection error on {archive_url}: {e}")
             cur_date -= timedelta(days=1)
@@ -243,7 +245,7 @@ def modernghana_scraper(end_date_str, start_date_str=None):
                 seen_urls.add(abs_url)
 
                 try:
-                    art_res = requests.get(abs_url, headers=get_user_agent(), timeout=8)
+                    art_res = session.get(abs_url, timeout=8)
                     if art_res.status_code == 200:
                         art_soup = BeautifulSoup(art_res.text, 'html.parser')
                         content = extract_article_content(art_soup)
@@ -279,40 +281,75 @@ def news3_scraper(category, sub_category, end_date_str):
     page_num = 1
     max_pages = 5
     stop_scraping = False
+    session = requests.Session()
+    session.headers.update(get_user_agent())
 
     while page_num <= max_pages and not stop_scraping:
-        headers = get_user_agent()
-        url = f'https://3news.com/{category}{sub_category}/page/{page_num}/'
+        sub_path = f"/{sub_category}" if sub_category else ""
+        if page_num == 1:
+            url = f'https://3news.com/{category}{sub_path}/'
+        else:
+            url = f'https://3news.com/{category}{sub_path}/page/{page_num}/'
         print(f"[3News] Scraping {url}")
 
         try:
-            res = requests.get(url, headers=headers, timeout=10)
+            res = session.get(url, timeout=10)
         except Exception as e:
             print(f"[3News] Error getting {url}: {e}")
             break
 
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # Robust: search for any entry title or article container
-            modules = soup.find_all(['h2', 'h3'], class_=re.compile(r'entry-title|td-module-title', re.I)) or soup.find_all('article')
+            # Robust: search for article tags or entry-title containers
+            articles = soup.find_all('article')
+            if not articles:
+                articles = soup.find_all(['h2', 'h3'], class_=re.compile(r'entry-title|td-module-title', re.I))
 
-            if not modules:
+            if not articles:
                 print(f"[3News] No modules found on page {page_num}.")
                 break
 
-            for mod in modules:
-                a_tag = mod.find('a') if mod.name != 'a' else mod
+            for mod in articles:
+                # Pre-check time tag on module card if available to avoid unnecessary fetch
+                card_time = mod.find('time')
+                if card_time:
+                    dt_val = card_time.get('datetime') or card_time.get('content')
+                    if dt_val:
+                        try:
+                            card_date = datetime.fromisoformat(dt_val.replace('Z', '+00:00')).date()
+                            if card_date < end_date:
+                                print(f"[3News] Article date {card_date} is older than end date {end_date}. Stopping.")
+                                stop_scraping = True
+                                break
+                        except Exception:
+                            pass
+
+                h_tag = mod.find(['h1', 'h2', 'h3', 'h4'])
+                a_tag = h_tag.find('a') if h_tag and h_tag.find('a') else None
+                if not a_tag:
+                    if mod.name == 'a':
+                        a_tag = mod
+                    else:
+                        for cand in mod.find_all('a', href=True):
+                            href = cand.get('href')
+                            if href and href not in ('/news', '/news/', '#') and len(href) > 6:
+                                a_tag = cand
+                                break
                 if not a_tag:
                     continue
 
-                title = a_tag.get_text(strip=True)
-                art_url = a_tag.get('href')
+                title = h_tag.get_text(strip=True) if h_tag else a_tag.get_text(strip=True)
+                rel_url = a_tag.get('href')
 
-                if not art_url or not title or len(title) < 10:
+                if not rel_url or not title or len(title) < 10:
+                    continue
+
+                art_url = urljoin('https://3news.com', rel_url)
+                if art_url.rstrip('/').endswith(f'/{category}'):
                     continue
 
                 try:
-                    art_res = requests.get(art_url, headers=get_user_agent(), timeout=8)
+                    art_res = session.get(art_url, timeout=8)
                     if art_res.status_code == 200:
                         art_soup = BeautifulSoup(art_res.text, 'html.parser')
                         pub_date = extract_article_date(art_soup, datetime.today().date())
@@ -380,41 +417,49 @@ def joynews_scraper(category, sub_category, end_date_str):
     page_num = 1
     max_pages = 5
     stop_scraping = False
+    session = requests.Session()
+    session.headers.update(get_user_agent())
 
     while page_num <= max_pages and not stop_scraping:
-        headers = get_user_agent()
         sub_path = f"/{sub_category}" if sub_category else ""
-        url = f'https://www.myjoyonline.com/{category}{sub_path}/page/{page_num}/'
+        if page_num == 1:
+            url = f'https://www.myjoyonline.com/{category}{sub_path}/'
+        else:
+            url = f'https://www.myjoyonline.com/{category}{sub_path}/page/{page_num}/'
         print(f"[MyJoyOnline] Scraping {url}")
 
         try:
-            res = requests.get(url, headers=headers, timeout=10)
+            res = session.get(url, timeout=10)
         except Exception as e:
             print(f"[MyJoyOnline] Error getting {url}: {e}")
             break
 
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # Look for story list items or articles
-            articles = soup.find_all('div', class_=re.compile(r'story-list|home-section|post', re.I)) or soup.find_all('article')
+            seen_urls = set()
 
-            if not articles:
+            candidates = []
+            for a in soup.find_all('a', href=True):
+                href = a.get('href')
+                title = a.get_text(strip=True)
+                if not href.startswith('http'):
+                    href = urljoin('https://www.myjoyonline.com', href)
+                if href in seen_urls:
+                    continue
+                if not href.startswith('https://www.myjoyonline.com/'):
+                    continue
+                path = href.replace('https://www.myjoyonline.com', '').strip('/')
+                if '/' in path or not path or len(title) < 15:
+                    continue
+                seen_urls.add(href)
+                candidates.append((href, title))
+
+            if not candidates:
                 break
 
-            for art in articles:
-                a_tag = art.find('a')
-                if not a_tag:
-                    continue
-
-                h_tag = art.find(['h2', 'h3', 'h4'])
-                title = h_tag.get_text(strip=True) if h_tag else a_tag.get_text(strip=True)
-                art_url = a_tag.get('href')
-
-                if not art_url or not title or len(title) < 10:
-                    continue
-
+            for art_url, title in candidates:
                 try:
-                    art_res = requests.get(art_url, headers=get_user_agent(), timeout=8)
+                    art_res = session.get(art_url, timeout=8)
                     if art_res.status_code == 200:
                         art_soup = BeautifulSoup(art_res.text, 'html.parser')
                         pub_date = extract_article_date(art_soup, datetime.today().date())
@@ -464,14 +509,15 @@ def joynews_multi_scraper(source_data):
 def yenghana_scraper(category, end_date_str):
     data = []
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    headers = get_user_agent()
+    session = requests.Session()
+    session.headers.update(get_user_agent())
 
     # Try standard category page first: https://yen.com.gh/{category}/
     cat_url = f"https://yen.com.gh/{category.lower()}/"
     print(f"[Yen Ghana] Scraping category URL: {cat_url}")
 
     try:
-        res = requests.get(cat_url, headers=headers, timeout=10)
+        res = session.get(cat_url, timeout=10)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             articles = soup.find_all('article') or soup.find_all('div', class_=re.compile(r'article-card|post', re.I))
@@ -491,7 +537,7 @@ def yenghana_scraper(category, end_date_str):
                     art_url = urljoin('https://yen.com.gh', art_url)
 
                 try:
-                    art_res = requests.get(art_url, headers=get_user_agent(), timeout=8)
+                    art_res = session.get(art_url, timeout=8)
                     if art_res.status_code == 200:
                         art_soup = BeautifulSoup(art_res.text, 'html.parser')
                         pub_date = extract_article_date(art_soup, datetime.today().date())

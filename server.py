@@ -5,7 +5,7 @@ Serves static files and provides /api/scrape endpoint that calls scraper.py func
 import os
 import json
 import traceback
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from datetime import datetime, timedelta
 import pandas as pd
 
@@ -69,16 +69,18 @@ class PlagiarismAppHandler(SimpleHTTPRequestHandler):
             return datetime.now().date()
 
         def prepare_source_payload(s_data):
+            cats = s_data.get('categories', [])
+            unique_cats = list(dict.fromkeys(cats)) if isinstance(cats, list) else []
             return {
                 'start_date': parse_date(s_data.get('start_date')),
                 'end_date': parse_date(s_data.get('end_date')),
-                'categories': s_data.get('categories', [])
+                'categories': unique_cats
             }
 
         def run_scraper_for_source(source_name, source_payload):
             print(f"Scraping {source_name} with categories {source_payload['categories']} from {source_payload['end_date']} to {source_payload['start_date']}...")
             try:
-                if source_name == 'Ghanaweb':
+                if source_name in ('Ghanaweb', 'Ghana web'):
                     return ghanaweb_multi_scraper(source_payload)
                 elif source_name == '3News':
                     return new3_multi_scraper(source_payload)
@@ -143,21 +145,29 @@ class PlagiarismAppHandler(SimpleHTTPRequestHandler):
                 'articles2': records2
             })
 
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            print("[Scraper API] Client connection was aborted or closed by client before response could be sent.")
         except Exception as e:
             traceback.print_exc()
-            self.send_json_response({'success': False, 'error': str(e)}, 500)
+            try:
+                self.send_json_response({'success': False, 'error': str(e)}, 500)
+            except Exception:
+                pass
 
     def send_json_response(self, data, status_code=200):
-        body = json.dumps(data).encode('utf-8')
-        self.send_response(status_code)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            body = json.dumps(data).encode('utf-8')
+            self.send_response(status_code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            print(f"[Server] Client closed or aborted connection before response could be delivered (Status {status_code}).")
 
 def run():
     server_address = ('', PORT)
-    httpd = HTTPServer(server_address, PlagiarismAppHandler)
+    httpd = ThreadingHTTPServer(server_address, PlagiarismAppHandler)
     print(f"\n=======================================================")
     print(f" News Plagiarism Checker Web Server running at:")
     print(f" http://localhost:{PORT}")

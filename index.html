@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>News Plagiarism Checker</title>
   <meta name="description" content="Jolly and clean news plagiarism checker across Ghana's news portals.">
-  
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -32,7 +33,8 @@
   <!-- Google Fonts: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
 
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -40,16 +42,18 @@
   <!-- Custom Styles -->
   <link rel="stylesheet" href="./css/style.css">
 </head>
+
 <body class="bg-[#347a38] text-slate-900 antialiased min-h-screen flex flex-col p-3 sm:p-5">
 
   <!-- Floating Top Navigation Bar -->
-  <header class="max-w-4xl w-full mx-auto bg-white rounded-2xl shadow-sm px-5 py-3.5 flex items-center justify-between mb-6">
+  <header
+    class="max-w-4xl w-full mx-auto bg-white rounded-2xl shadow-sm px-5 py-3.5 flex items-center justify-between mb-6">
     <!-- Brand / Logo -->
     <div class="flex items-center space-x-3">
       <!-- Clean Medical/Integrity Plus Cross -->
       <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
         <svg class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
         </svg>
       </div>
       <span class="text-sm font-extrabold tracking-wide text-slate-800 uppercase">News Checker</span>
@@ -57,19 +61,23 @@
 
     <!-- Navigation Pills -->
     <nav class="flex items-center space-x-1 sm:space-x-2">
-      <button class="nav-tab active px-3.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-800 transition-colors" data-tab="analysis">
+      <button
+        class="nav-tab active px-3.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-800 transition-colors"
+        data-tab="analysis">
         Checker
       </button>
-      <button class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition-colors" data-tab="quick-compare">
+      <button
+        class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition-colors"
+        data-tab="quick-compare">
         Text Compare
       </button>
-      <button class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition-colors" data-tab="upload">
-        Dataset
-      </button>
-      <button class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition-colors" data-tab="about">
+      <button
+        class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-50 transition-colors"
+        data-tab="about">
         Methodology
       </button>
-      <button id="reset-btn" type="button" class="ml-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors">
+      <button id="reset-btn" type="button"
+        class="ml-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors">
         Reset
       </button>
     </nav>
@@ -82,15 +90,18 @@
     <!-- TAB 1: MAIN PLAGIARISM CHECKER             -->
     <!-- ========================================== -->
     <div id="tab-analysis" class="tab-content space-y-8">
-      
+
       <!-- Jolly Header -->
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-5">
         <div>
-          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Which news sources are you comparing?</h2>
-          <p class="text-xs sm:text-sm text-slate-500 font-medium mt-1">Tap two sources below, set your dates, and scan for article similarities.</p>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Which news sources are you
+            comparing?</h2>
+          <p class="text-xs sm:text-sm text-slate-500 font-medium mt-1">Tap two sources below, set your dates, and scan
+            for article similarities.</p>
         </div>
         <div class="flex items-center gap-2 self-start sm:self-auto">
-          <span id="selected-sources-indicator" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+          <span id="selected-sources-indicator"
+            class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
             Select 2 sources
           </span>
         </div>
@@ -99,74 +110,98 @@
       <!-- Source Selection Cards Grid -->
       <div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3.5">
-          
-          <!-- Ghanaweb -->
-          <div class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]" data-source="Ghanaweb">
-            <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 mb-2 mt-1">
-              <svg class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-            </div>
-            <span class="font-bold text-xs text-slate-800">Ghanaweb</span>
-            <span class="badge-slot text-[10px] font-bold text-slate-400 mt-1">Tap to select</span>
-          </div>
 
-          <!-- 3News -->
-          <div class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]" data-source="3News">
+          <!-- 1. 3News -->
+          <div
+            class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]"
+            data-source="3News">
             <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 mb-2 mt-1">
-              <svg class="w-5 h-5 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+              <svg class="w-5 h-5 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
+                <polyline points="17 2 12 7 7 2" />
+              </svg>
             </div>
             <span class="font-bold text-xs text-slate-800">3News</span>
             <span class="badge-slot text-[10px] font-bold text-slate-400 mt-1">Tap to select</span>
           </div>
 
-          <!-- MyJoyOnline -->
-          <div class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]" data-source="MyJoyOnline">
+          <!-- 2. MyJoyOnline -->
+          <div
+            class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]"
+            data-source="MyJoyOnline">
             <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 mb-2 mt-1">
-              <svg class="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0116 0M7 16a5 5 0 0110 0M10 20a1 1 0 014 0"/></svg>
+              <svg class="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <path d="M4 11a9 9 0 0116 0M7 16a5 5 0 0110 0M10 20a1 1 0 014 0" />
+              </svg>
             </div>
             <span class="font-bold text-xs text-slate-800">MyJoyOnline</span>
             <span class="badge-slot text-[10px] font-bold text-slate-400 mt-1">Tap to select</span>
           </div>
 
-          <!-- Modern Ghana -->
-          <div class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]" data-source="Modern Ghana">
+          <!-- 3. Yen Ghana -->
+          <div
+            class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]"
+            data-source="Yen Ghana">
             <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 mb-2 mt-1">
-              <svg class="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z"/></svg>
+              <svg class="w-5 h-5 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                  d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+              </svg>
             </div>
-            <span class="font-bold text-xs text-slate-800">Modern Ghana</span>
+            <span class="font-bold text-xs text-slate-800">Yen Ghana</span>
             <span class="badge-slot text-[10px] font-bold text-slate-400 mt-1">Tap to select</span>
           </div>
 
-          <!-- Yen Ghana -->
-          <div class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]" data-source="Yen Ghana">
+          <!-- 4. Ghana web -->
+          <div
+            class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]"
+            data-source="Ghanaweb">
             <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 mb-2 mt-1">
-              <svg class="w-5 h-5 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+              <svg class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path
+                  d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              </svg>
             </div>
-            <span class="font-bold text-xs text-slate-800">Yen Ghana</span>
+            <span class="font-bold text-xs text-slate-800">Ghana web</span>
+            <span class="badge-slot text-[10px] font-bold text-slate-400 mt-1">Tap to select</span>
+          </div>
+
+          <!-- 5. Modern Ghana -->
+          <div
+            class="source-card bg-white border-2 border-slate-200 rounded-2xl p-4 text-center cursor-pointer flex flex-col items-center justify-between min-h-[120px]"
+            data-source="Modern Ghana">
+            <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 mb-2 mt-1">
+              <svg class="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <path
+                  d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
+                <path d="M18 14h-8M15 18h-5M10 6h8v4h-8V6z" />
+              </svg>
+            </div>
+            <span class="font-bold text-xs text-slate-800">Modern Ghana</span>
             <span class="badge-slot text-[10px] font-bold text-slate-400 mt-1">Tap to select</span>
           </div>
 
         </div>
       </div>
 
-      <!-- Clean Controls Panel: Dates, Categories & Threshold -->
+      <!-- Clean Controls Panel: Dates & Categories -->
       <div class="bg-slate-50/70 rounded-2xl p-5 border border-slate-200/80 space-y-4">
-        
-        <!-- Dates & Threshold Row -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+
+        <!-- Dates Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Start Date</label>
-            <input type="date" id="scan-start-date" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <input type="date" id="scan-start-date"
+              class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">End Date</label>
-            <input type="date" id="scan-end-date" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-          <div>
-            <div class="flex justify-between items-center mb-1">
-              <label class="text-xs font-bold text-slate-700">Similarity Threshold</label>
-              <span id="threshold-value" class="text-xs font-extrabold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-md">70%</span>
-            </div>
-            <input type="range" id="threshold-slider" min="35" max="100" value="70" class="w-full">
+            <input type="date" id="scan-end-date"
+              class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
         </div>
 
@@ -182,9 +217,13 @@
 
       <!-- Big Jolly Action Button -->
       <div class="text-center pt-1">
-        <button id="run-scan-btn" type="button" class="w-full sm:w-auto px-10 py-3.5 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-sm rounded-2xl shadow-lg shadow-emerald-900/10 transition-all transform active:scale-95 flex items-center justify-center gap-2.5 mx-auto">
+        <button id="run-scan-btn" type="button"
+          class="w-full sm:w-auto px-10 py-3.5 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-sm rounded-2xl shadow-lg shadow-emerald-900/10 transition-all transform active:scale-95 flex items-center justify-center gap-2.5 mx-auto">
           <span id="btn-text">Scan & Check Plagiarism</span>
-          <svg id="btn-spinner" class="hidden animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <svg id="btn-spinner" class="hidden animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
         </button>
       </div>
 
@@ -197,11 +236,13 @@
             Running
           </span>
         </div>
-        <div id="terminal-logs" class="terminal-box p-4 text-xs text-slate-300 max-h-48 overflow-y-auto space-y-1.5"></div>
+        <div id="terminal-logs" class="terminal-box p-4 text-xs text-slate-300 max-h-48 overflow-y-auto space-y-1.5">
+        </div>
       </div>
 
       <!-- No Results Banner -->
-      <div id="no-results-banner" class="hidden bg-slate-50 border border-slate-200 text-slate-700 p-5 rounded-2xl text-xs font-medium text-center">
+      <div id="no-results-banner"
+        class="hidden bg-slate-50 border border-slate-200 text-slate-700 p-5 rounded-2xl text-xs font-medium text-center">
         <p></p>
       </div>
 
@@ -209,94 +250,337 @@
       <!-- RESULTS DASHBOARD                          -->
       <!-- ========================================== -->
       <div id="analysis-results" class="hidden space-y-6 pt-4 border-t border-slate-100">
-        
-        <!-- Summary Header Banner -->
-        <div class="bg-slate-900 text-white rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <h3 id="report-title-count" class="text-xl sm:text-2xl font-extrabold">0 Plagiarized Articles Found</h3>
-            <p id="report-subtitle" class="text-xs text-slate-400 mt-0.5">Calculated using TF-IDF Vectorization and Cosine Similarity.</p>
+
+        <!-- Summary Header Banner (Dynamic: Emerald when clean, Red/Amber when flagged) -->
+        <div id="results-hero-banner"
+          class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 transition-all duration-300 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2">
+              <span id="results-status-badge"
+                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold transition-colors">
+                <!-- Dynamically injected via JS -->
+              </span>
+            </div>
+            <h3 id="report-title-count" class="text-lg sm:text-xl font-bold text-white tracking-tight">0 Plagiarized
+              Articles Found</h3>
+            <p id="report-subtitle" class="text-xs text-slate-400 font-medium">All comparisons below threshold.</p>
           </div>
-          <div class="flex items-center gap-2">
-            <span id="s1-summary-pill" class="text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-xl"></span>
-            <span id="s2-summary-pill" class="text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 px-3 py-1 rounded-xl"></span>
+          <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <span id="s1-summary-pill" class="text-xs font-semibold px-2.5 py-1 rounded-lg border"></span>
+            <span id="s2-summary-pill" class="text-xs font-semibold px-2.5 py-1 rounded-lg border"></span>
           </div>
         </div>
 
-        <!-- Segmented Views Navigation -->
-        <div class="flex border-b border-slate-200 pb-2">
-          <div class="flex space-x-2">
-            <button type="button" class="res-tab active px-4 py-2 text-xs font-bold text-slate-900 border-b-2 border-slate-900" data-view="table">
-              Article Pairs (<span id="tab-pairs-badge">0</span>)
-            </button>
-            <button type="button" class="res-tab px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 border-b-2 border-transparent" data-view="charts">
+        <!-- KPI Metrics Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Articles Scanned</span>
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span id="kpi-total-articles" class="text-2xl font-black text-slate-900">0</span>
+              <span class="text-xs font-medium text-slate-500">total</span>
+            </div>
+            <span id="kpi-sources-breakdown" class="text-[11px] font-semibold text-slate-500 mt-1 truncate">0 vs
+              0</span>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Suspect Pairs</span>
+              <svg id="kpi-pairs-icon" class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span id="kpi-plagiarized-count" class="text-2xl font-black text-emerald-600">0</span>
+              <span class="text-xs font-medium text-slate-500">detected</span>
+            </div>
+            <span id="kpi-pairs-subtext" class="text-[11px] font-semibold text-slate-500 mt-1">Above threshold</span>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Peak Similarity</span>
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span id="kpi-peak-score" class="text-2xl font-black text-slate-900">0.0%</span>
+              <span class="text-xs font-medium text-slate-500">highest</span>
+            </div>
+            <span id="kpi-peak-subtext" class="text-[11px] font-semibold text-slate-500 mt-1">Cross-source
+              overlap</span>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 mb-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Detection Level</span>
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span id="kpi-threshold-level" class="text-2xl font-black text-slate-900">10%</span>
+              <span class="text-xs font-medium text-slate-500">threshold</span>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-500 mt-1">Cosine dot-product</span>
+          </div>
+        </div>
+
+        <!-- Simplified Similarity Threshold Controller -->
+        <div
+          class="bg-white border border-slate-200/90 rounded-2xl p-3 sm:px-4 sm:py-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2 whitespace-nowrap">
+            <span class="text-xs font-bold text-slate-800 uppercase tracking-wide">Threshold:</span>
+            <span id="threshold-value"
+              class="text-xs font-black text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md">
+              10%
+            </span>
+          </div>
+
+          <div class="flex-grow flex items-center gap-2 max-w-md w-full px-1">
+            <span class="text-[10px] font-bold text-slate-400">10%</span>
+            <input type="range" id="threshold-slider" min="10" max="100" value="10" class="w-full cursor-pointer">
+            <span class="text-[10px] font-bold text-slate-400">100%</span>
+          </div>
+
+          <div class="flex items-center gap-1.5 self-end sm:self-auto">
+            <button type="button"
+              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-emerald-600 text-white"
+              data-val="10">10%</button>
+            <button type="button"
+              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
+              data-val="25">25%</button>
+            <button type="button"
+              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
+              data-val="50">50%</button>
+            <button type="button"
+              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
+              data-val="70">70%</button>
+          </div>
+        </div>
+
+        <!-- Segmented Views Navigation & Export -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
+          <div class="flex space-x-1.5 sm:space-x-2">
+            <button type="button"
+              class="res-tab active px-3.5 py-1.5 text-xs font-bold text-slate-900 bg-slate-100 rounded-xl transition-colors"
+              data-view="charts">
               Visual Charts
             </button>
-            <button type="button" class="res-tab px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 border-b-2 border-transparent" data-view="duplicates">
-              Internal Duplicates
+            <button type="button"
+              class="res-tab px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors"
+              data-view="pairs">
+              Article Pairs (<span id="tab-pairs-badge">0</span>)
+            </button>
+            <button type="button"
+              class="res-tab px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-xl transition-colors"
+              data-view="duplicates">
+              Internal Duplicates (<span id="tab-dups-badge">0</span>)
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2 self-end sm:self-auto">
+            <button id="export-results-btn" type="button"
+              class="hidden px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition-colors flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Export CSV</span>
             </button>
           </div>
         </div>
 
-        <!-- VIEW 1: Detected Pairs Table -->
-        <div id="view-table" class="res-view bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-slate-600">
-              <thead class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-slate-500">
-                <tr>
-                  <th class="px-4 py-3.5">Score</th>
-                  <th class="px-4 py-3.5">Source 1 Article</th>
-                  <th class="px-4 py-3.5">Source 2 Article</th>
-                  <th class="px-4 py-3.5 text-right">Inspect</th>
-                </tr>
-              </thead>
-              <tbody id="plagiarism-table-body" class="divide-y divide-slate-100"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- VIEW 2: Visual Charts -->
-        <div id="view-charts" class="res-view hidden space-y-6">
-          <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+        <!-- VIEW 1: Visual Charts -->
+        <div id="view-charts" class="res-view space-y-6">
+          <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200 overflow-hidden">
             <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Proportion Plagiarized</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-56">
-              <div class="relative h-full"><canvas id="chart-proportion-s1"></canvas></div>
-              <div class="relative h-full"><canvas id="chart-proportion-s2"></canvas></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="chart-wrapper relative w-full h-64 overflow-hidden"><canvas id="chart-proportion-s1"></canvas>
+              </div>
+              <div class="chart-wrapper relative w-full h-64 overflow-hidden"><canvas id="chart-proportion-s2"></canvas>
+              </div>
             </div>
           </div>
 
-          <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+          <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200 overflow-hidden">
             <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Category Breakdown</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-56">
-              <div class="relative h-full"><canvas id="chart-categories-s1"></canvas></div>
-              <div class="relative h-full"><canvas id="chart-categories-s2"></canvas></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="chart-wrapper relative w-full h-64 overflow-hidden"><canvas id="chart-categories-s1"></canvas>
+              </div>
+              <div class="chart-wrapper relative w-full h-64 overflow-hidden"><canvas id="chart-categories-s2"></canvas>
+              </div>
             </div>
           </div>
 
-          <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+          <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200 overflow-hidden">
             <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Date Distribution</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-56">
-              <div class="relative h-full"><canvas id="chart-dates-s1"></canvas></div>
-              <div class="relative h-full"><canvas id="chart-dates-s2"></canvas></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="chart-wrapper relative w-full h-64 overflow-hidden"><canvas id="chart-dates-s1"></canvas>
+              </div>
+              <div class="chart-wrapper relative w-full h-64 overflow-hidden"><canvas id="chart-dates-s2"></canvas>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- VIEW 3: Internal Duplicates -->
-        <div id="view-duplicates" class="res-view hidden space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-              <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Similar Content (Different URLs)</h4>
-              <div class="grid grid-cols-2 gap-2 h-40">
-                <div class="relative h-full"><canvas id="chart-similar-s1"></canvas></div>
-                <div class="relative h-full"><canvas id="chart-similar-s2"></canvas></div>
+        <!-- VIEW 2: Detected Pairs & Zero-State Container -->
+        <div id="view-pairs" class="res-view hidden space-y-4">
+
+          <!-- When Plagiarized Pairs Found: Toolbar -->
+          <div id="pairs-toolbar"
+            class="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+            <!-- Search Filter -->
+            <div class="relative flex-grow max-w-sm">
+              <input type="text" id="pairs-search-input" placeholder="Search by title or keyword..."
+                class="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <!-- Severity Filters -->
+              <div class="flex bg-slate-200/60 p-0.5 rounded-xl text-[11px] font-bold text-slate-600">
+                <button type="button"
+                  class="filter-sev-btn active px-2.5 py-1 rounded-lg bg-white text-slate-800 shadow-xs"
+                  data-sev="all">All</button>
+                <button type="button" class="filter-sev-btn px-2.5 py-1 rounded-lg hover:text-slate-900"
+                  data-sev="critical">&ge;70% High</button>
+                <button type="button" class="filter-sev-btn px-2.5 py-1 rounded-lg hover:text-slate-900"
+                  data-sev="moderate">35-69% Moderate</button>
+                <button type="button" class="filter-sev-btn px-2.5 py-1 rounded-lg hover:text-slate-900"
+                  data-sev="low">&lt;35% Low</button>
+              </div>
+
+              <!-- View Mode Switcher -->
+              <div class="flex bg-slate-200/60 p-0.5 rounded-xl">
+                <button type="button" id="btn-mode-cards"
+                  class="view-mode-btn active p-1.5 rounded-lg bg-white text-slate-800 shadow-xs" title="Cards View">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                </button>
+                <button type="button" id="btn-mode-table"
+                  class="view-mode-btn p-1.5 rounded-lg text-slate-600 hover:text-slate-900" title="Table View">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cards View Container -->
+          <div id="pairs-cards-container" class="space-y-4"></div>
+
+          <!-- Table View Container -->
+          <div id="pairs-table-container" class="hidden bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-600">
+                <thead
+                  class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-slate-500">
+                  <tr>
+                    <th class="px-4 py-3.5">Score</th>
+                    <th class="px-4 py-3.5">Source 1 Article</th>
+                    <th class="px-4 py-3.5">Source 2 Article</th>
+                    <th class="px-4 py-3.5 text-right">Inspect</th>
+                  </tr>
+                </thead>
+                <tbody id="plagiarism-table-body" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Zero Results State Card -->
+          <div id="zero-results-card" class="hidden space-y-5">
+            <div class="bg-emerald-50/50 border border-emerald-200/80 rounded-3xl p-6 sm:p-8 text-center space-y-4">
+              <div
+                class="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-2xl mx-auto flex items-center justify-center shadow-xs">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+
+              <div class="max-w-md mx-auto space-y-1">
+                <h4 class="text-base font-bold text-slate-900 tracking-tight">No Plagiarism Detected</h4>
+                <p id="zero-state-description" class="text-xs text-slate-500">
+                  All comparisons scored below the threshold.
+                </p>
+              </div>
+
+              <!-- Recommendation Pill / Quick Action -->
+              <div id="zero-state-action-box" class="pt-1 max-w-md mx-auto">
+                <div class="bg-white border border-emerald-200 rounded-2xl p-3.5 shadow-xs space-y-2">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-600 font-medium">Highest Cross Similarity:</span>
+                    <span id="zero-highest-score"
+                      class="font-extrabold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md">0%</span>
+                  </div>
+                  <button id="zero-lower-threshold-btn" type="button"
+                    class="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                    <span id="zero-btn-label">Lower Threshold & Re-analyze</span>
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <!-- Top Closest Matches (Below Threshold) -->
+            <div id="closest-matches-section" class="hidden space-y-3 pt-2">
+              <div class="flex items-center justify-between">
+                <h5 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>Closest Article Matches</span>
+                  <span class="text-[10px] text-slate-400 font-semibold normal-case">(Below current threshold)</span>
+                </h5>
+                <span class="text-[11px] text-slate-500 font-medium">Potential topic overlap</span>
+              </div>
+              <div id="closest-matches-container" class="space-y-3"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- VIEW 3: Internal Duplicates -->
+        <div id="view-duplicates" class="res-view hidden space-y-5">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 overflow-hidden">
+              <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Similar Content (Different
+                URLs)</h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="chart-wrapper relative w-full h-56 overflow-hidden"><canvas id="chart-similar-s1"></canvas>
+                </div>
+                <div class="chart-wrapper relative w-full h-56 overflow-hidden"><canvas id="chart-similar-s2"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 overflow-hidden">
               <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Duplicate URLs</h4>
-              <div class="grid grid-cols-2 gap-2 h-40">
-                <div id="dup-url-s1-container" class="relative h-full"><canvas id="chart-dup-s1"></canvas></div>
-                <div id="dup-url-s2-container" class="relative h-full"><canvas id="chart-dup-s2"></canvas></div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div id="dup-url-s1-container" class="chart-wrapper relative w-full h-56 overflow-hidden"><canvas
+                    id="chart-dup-s1"></canvas></div>
+                <div id="dup-url-s2-container" class="chart-wrapper relative w-full h-56 overflow-hidden"><canvas
+                    id="chart-dup-s2"></canvas></div>
               </div>
             </div>
           </div>
@@ -314,22 +598,26 @@
     <div id="tab-quick-compare" class="tab-content hidden space-y-6">
       <div>
         <h2 class="text-2xl font-extrabold text-slate-900">Direct Text Comparison</h2>
-        <p class="text-xs text-slate-500 mt-1">Paste any two articles or paragraphs to compute their similarity score and highlight overlapping text.</p>
+        <p class="text-xs text-slate-500 mt-1">Paste any two articles or paragraphs to compute their similarity score
+          and highlight overlapping text.</p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1.5">Article Text A</label>
-          <textarea id="quick-text-a" rows="9" placeholder="Paste first text here..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+          <textarea id="quick-text-a" rows="9" placeholder="Paste first text here..."
+            class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1.5">Article Text B</label>
-          <textarea id="quick-text-b" rows="9" placeholder="Paste second text here..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+          <textarea id="quick-text-b" rows="9" placeholder="Paste second text here..."
+            class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
         </div>
       </div>
 
       <div class="text-center">
-        <button id="quick-compare-btn" type="button" class="px-8 py-3 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-xs rounded-xl shadow-md transition-all">
+        <button id="quick-compare-btn" type="button"
+          class="px-8 py-3 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-xs rounded-xl shadow-md transition-all">
           Compare Texts
         </button>
       </div>
@@ -346,49 +634,29 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-xs">
           <div>
             <h4 class="font-bold text-slate-700 mb-1">Text A Overlaps</h4>
-            <div id="quick-diff-a" class="bg-white p-3 rounded-xl border border-slate-200 leading-relaxed text-slate-800 max-h-48 overflow-y-auto"></div>
+            <div id="quick-diff-a"
+              class="bg-white p-3 rounded-xl border border-slate-200 leading-relaxed text-slate-800 max-h-48 overflow-y-auto">
+            </div>
           </div>
           <div>
             <h4 class="font-bold text-slate-700 mb-1">Text B Overlaps</h4>
-            <div id="quick-diff-b" class="bg-white p-3 rounded-xl border border-slate-200 leading-relaxed text-slate-800 max-h-48 overflow-y-auto"></div>
+            <div id="quick-diff-b"
+              class="bg-white p-3 rounded-xl border border-slate-200 leading-relaxed text-slate-800 max-h-48 overflow-y-auto">
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- ========================================== -->
-    <!-- TAB 3: DATASET MANAGEMENT                  -->
-    <!-- ========================================== -->
-    <div id="tab-upload" class="tab-content hidden max-w-xl mx-auto space-y-6">
-      <div>
-        <h2 class="text-2xl font-extrabold text-slate-900">Custom Dataset</h2>
-        <p class="text-xs text-slate-500 mt-1">Upload a JSON or CSV file of articles to analyze offline.</p>
-      </div>
-
-      <div class="bg-slate-50 p-8 rounded-3xl border-2 border-dashed border-slate-300 text-center space-y-4">
-        <p class="text-xs text-slate-600">Select an articles file from your computer</p>
-        <label for="dataset-file-input" class="cursor-pointer inline-flex items-center px-6 py-2.5 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-xs rounded-xl shadow-md transition-colors">
-          Browse File
-        </label>
-        <input type="file" id="dataset-file-input" accept=".json,.csv" class="hidden">
-      </div>
-
-      <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs text-slate-600 space-y-1">
-        <span class="font-bold text-slate-800">Required Columns:</span>
-        <code class="block bg-white p-2 rounded border border-slate-200 text-slate-800 font-mono text-[11px]">
-          ["Source", "Category", "Date Posted", "Title", "URL", "Content"]
-        </code>
-      </div>
-    </div>
-
-    <!-- ========================================== -->
-    <!-- TAB 4: METHODOLOGY                         -->
+    <!-- TAB 3: METHODOLOGY                         -->
     <!-- ========================================== -->
     <div id="tab-about" class="tab-content hidden max-w-2xl mx-auto space-y-5">
       <div class="space-y-4 text-xs text-slate-600 leading-relaxed">
         <h2 class="text-2xl font-extrabold text-slate-900">Methodology</h2>
         <p>
-          This application analyzes text similarity across five major Ghanaian news portals: <strong>Ghanaweb, 3News, MyJoyOnline, Modern Ghana, and Yen Ghana</strong>.
+          This application analyzes text similarity across five major Ghanaian news portals: <strong>Ghanaweb, 3News,
+            MyJoyOnline, Modern Ghana, and Yen Ghana</strong>.
         </p>
         <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
           <h4 class="font-bold text-slate-800">Detection Steps</h4>
@@ -407,9 +675,11 @@
   <!-- ========================================== -->
   <!-- SIDE-BY-SIDE DIFF MODAL                    -->
   <!-- ========================================== -->
-  <div id="diff-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[88vh] flex flex-col overflow-hidden">
-      
+  <div id="diff-modal"
+    class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      class="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[88vh] flex flex-col overflow-hidden">
+
       <!-- Modal Header -->
       <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -418,7 +688,8 @@
           </span>
           <span class="text-sm font-bold text-slate-800">Side-by-Side Comparison</span>
         </div>
-        <button id="close-modal-btn" type="button" class="text-slate-400 hover:text-slate-700 text-base font-bold p-1 rounded-full hover:bg-slate-100 transition-colors">
+        <button id="close-modal-btn" type="button"
+          class="text-slate-400 hover:text-slate-700 text-base font-bold p-1 rounded-full hover:bg-slate-100 transition-colors">
           ✕
         </button>
       </div>
@@ -428,34 +699,43 @@
         <!-- Article 1 -->
         <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col shadow-xs">
           <div class="border-b border-slate-100 pb-2 mb-2">
-            <span id="modal-source1-label" class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Source 1</span>
+            <span id="modal-source1-label"
+              class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Source 1</span>
             <h4 id="modal-title1" class="font-bold text-slate-900 text-xs mt-0.5 leading-snug"></h4>
             <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500">
               <span id="modal-stats1"></span>
-              <a id="modal-url1" href="#" target="_blank" rel="noopener noreferrer" class="text-emerald-700 font-semibold hover:underline">Visit ↗</a>
+              <a id="modal-url1" href="#" target="_blank" rel="noopener noreferrer"
+                class="text-emerald-700 font-semibold hover:underline">Visit ↗</a>
             </div>
           </div>
-          <div id="modal-content1" class="leading-relaxed text-slate-700 space-y-2 overflow-y-auto max-h-[46vh] pr-1"></div>
+          <div id="modal-content1" class="leading-relaxed text-slate-700 space-y-2 overflow-y-auto max-h-[46vh] pr-1">
+          </div>
         </div>
 
         <!-- Article 2 -->
         <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col shadow-xs">
           <div class="border-b border-slate-100 pb-2 mb-2">
-            <span id="modal-source2-label" class="text-[10px] font-bold uppercase tracking-wider text-sky-700">Source 2</span>
+            <span id="modal-source2-label" class="text-[10px] font-bold uppercase tracking-wider text-sky-700">Source
+              2</span>
             <h4 id="modal-title2" class="font-bold text-slate-900 text-xs mt-0.5 leading-snug"></h4>
             <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500">
               <span id="modal-stats2"></span>
-              <a id="modal-url2" href="#" target="_blank" rel="noopener noreferrer" class="text-sky-700 font-semibold hover:underline">Visit ↗</a>
+              <a id="modal-url2" href="#" target="_blank" rel="noopener noreferrer"
+                class="text-sky-700 font-semibold hover:underline">Visit ↗</a>
             </div>
           </div>
-          <div id="modal-content2" class="leading-relaxed text-slate-700 space-y-2 overflow-y-auto max-h-[46vh] pr-1"></div>
+          <div id="modal-content2" class="leading-relaxed text-slate-700 space-y-2 overflow-y-auto max-h-[46vh] pr-1">
+          </div>
         </div>
       </div>
 
       <!-- Modal Footer -->
-      <div class="px-6 py-3 border-t border-slate-100 bg-white flex items-center justify-between text-[11px] text-slate-500">
+      <div
+        class="px-6 py-3 border-t border-slate-100 bg-white flex items-center justify-between text-[11px] text-slate-500">
         <span>Highlighted sentences indicate overlapping text.</span>
-        <button onclick="document.getElementById('diff-modal').classList.add('hidden'); document.body.style.overflow='';" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs transition-colors">
+        <button
+          onclick="document.getElementById('diff-modal').classList.add('hidden'); document.body.style.overflow='';"
+          class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs transition-colors">
           Close
         </button>
       </div>
@@ -464,7 +744,9 @@
   </div>
 
   <!-- Notification Toast -->
-  <div id="app-toast" class="fixed bottom-4 right-4 z-50 px-4 py-2.5 rounded-2xl shadow-lg transition-all duration-300 transform translate-y-16 opacity-0 font-bold text-xs flex items-center gap-2"></div>
+  <div id="app-toast"
+    class="fixed bottom-4 right-4 z-50 px-4 py-2.5 rounded-2xl shadow-lg transition-all duration-300 transform translate-y-16 opacity-0 font-bold text-xs flex items-center gap-2">
+  </div>
 
   <!-- Footer -->
   <footer class="text-center text-xs text-white/70 py-2">
@@ -479,4 +761,5 @@
   <script src="./js/app.js"></script>
 
 </body>
+
 </html>

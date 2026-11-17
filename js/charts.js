@@ -50,6 +50,9 @@ function renderPieChart(canvasId, title, dataObj, type = 'plagiarism') {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: { top: 4, bottom: 4, left: 4, right: 4 }
+      },
       plugins: {
         legend: {
           position: 'bottom',
@@ -58,20 +61,21 @@ function renderPieChart(canvasId, title, dataObj, type = 'plagiarism') {
             boxHeight: 8,
             usePointStyle: true,
             pointStyle: 'circle',
-            font: { size: 11, family: 'Inter, system-ui, sans-serif' },
-            color: '#475569'
+            font: { size: 10, family: 'Inter, system-ui, sans-serif' },
+            color: '#475569',
+            padding: 8
           }
         },
         title: {
           display: true,
           text: title,
-          font: { size: 13, weight: '600', family: 'Inter, system-ui, sans-serif' },
+          font: { size: 12, weight: '600', family: 'Inter, system-ui, sans-serif' },
           color: '#0f172a',
-          padding: { bottom: 12 }
+          padding: { top: 0, bottom: 6 }
         },
         tooltip: {
           callbacks: {
-            label: function(context) {
+            label: function (context) {
               const label = context.label || '';
               const val = context.raw || 0;
               const total = context.dataset.data.reduce((a, b) => a + b, 0);
@@ -81,7 +85,7 @@ function renderPieChart(canvasId, title, dataObj, type = 'plagiarism') {
           }
         }
       },
-      cutout: '72%'
+      cutout: '68%'
     }
   });
 }
@@ -146,6 +150,7 @@ function renderHorizontalBarChart(canvasId, title, dataObj, barColor = '#334155'
 
   const labels = Object.keys(dataObj);
   const values = Object.values(dataObj);
+  if (!labels.length) return;
 
   chartInstances[canvasId] = new Chart(ctx, {
     type: 'bar',
@@ -187,10 +192,95 @@ function renderHorizontalBarChart(canvasId, title, dataObj, barColor = '#334155'
   });
 }
 
+/**
+ * Render All Analysis Charts (Visual Charts Tab & Internal Duplicates Tab)
+ */
+function renderAnalysisCharts(s1Cleaned, s2Cleaned, s1DupInfo, s2DupInfo, numPlagiarized, dataScores) {
+  if (typeof Chart === 'undefined') return;
+
+  const src1 = (typeof state !== 'undefined' && state.source1) ? state.source1 : "Source 1";
+  const src2 = (typeof state !== 'undefined' && state.source2) ? state.source2 : "Source 2";
+
+  // Helper to count articles by field
+  function countBy(list, field) {
+    const res = {};
+    (list || []).forEach(item => {
+      const val = item[field] || "General";
+      res[val] = (res[val] || 0) + 1;
+    });
+    return res;
+  }
+
+  // 1. Proportion Plagiarized (Pie Charts)
+  const len1 = s1Cleaned ? s1Cleaned.length : 0;
+  const len2 = s2Cleaned ? s2Cleaned.length : 0;
+  const plagS1 = {
+    'Plagiarized': numPlagiarized,
+    'Original': Math.max(0, len1 - numPlagiarized)
+  };
+  const plagS2 = {
+    'Plagiarized': numPlagiarized,
+    'Original': Math.max(0, len2 - numPlagiarized)
+  };
+  renderPieChart('chart-proportion-s1', `${src1} Plagiarism Ratio`, plagS1, 'plagiarism');
+  renderPieChart('chart-proportion-s2', `${src2} Plagiarism Ratio`, plagS2, 'plagiarism');
+
+  // 2. Category Breakdown (Bar Charts)
+  const catData1 = (dataScores?.source1Categories && Object.keys(dataScores.source1Categories).length > 0)
+    ? dataScores.source1Categories
+    : countBy(s1Cleaned, 'Category');
+  const catData2 = (dataScores?.source2Categories && Object.keys(dataScores.source2Categories).length > 0)
+    ? dataScores.source2Categories
+    : countBy(s2Cleaned, 'Category');
+
+  renderBarChart('chart-categories-s1', `${src1} Categories`, catData1, '#059669');
+  renderBarChart('chart-categories-s2', `${src2} Categories`, catData2, '#0284c7');
+
+  // 3. Date Distribution (Horizontal Bar Charts)
+  const dateData1 = (dataScores?.source1DateCount && Object.keys(dataScores.source1DateCount).length > 0)
+    ? dataScores.source1DateCount
+    : countBy(s1Cleaned, 'Date Posted');
+  const dateData2 = (dataScores?.source2DateCount && Object.keys(dataScores.source2DateCount).length > 0)
+    ? dataScores.source2DateCount
+    : countBy(s2Cleaned, 'Date Posted');
+
+  renderHorizontalBarChart('chart-dates-s1', `${src1} Dates`, dateData1, '#10b981');
+  renderHorizontalBarChart('chart-dates-s2', `${src2} Dates`, dateData2, '#0ea5e9');
+
+  // 4. Internal Similarity
+  const withinS1 = (dataScores?.withinSourcePairs?.[src1] || []).length;
+  const withinS2 = (dataScores?.withinSourcePairs?.[src2] || []).length;
+
+  const simS1 = {
+    'Similar': withinS1,
+    'Distinct': Math.max(0, len1 - withinS1)
+  };
+  const simS2 = {
+    'Similar': withinS2,
+    'Distinct': Math.max(0, len2 - withinS2)
+  };
+  renderPieChart('chart-similar-s1', `${src1} Internal Similarity`, simS1, 'similar');
+  renderPieChart('chart-similar-s2', `${src2} Internal Similarity`, simS2, 'similar');
+
+  // 5. Duplicate URLs
+  const dupS1 = {
+    'Duplicate URL': s1DupInfo?.duplicates || 0,
+    'Unique URL': s1DupInfo?.cleaned?.length || len1
+  };
+  const dupS2 = {
+    'Duplicate URL': s2DupInfo?.duplicates || 0,
+    'Unique URL': s2DupInfo?.cleaned?.length || len2
+  };
+  renderPieChart('chart-dup-s1', `${src1} Duplicate URLs`, dupS1, 'dup');
+  renderPieChart('chart-dup-s2', `${src2} Duplicate URLs`, dupS2, 'dup');
+}
+
 const globalRootCharts = typeof window !== 'undefined' ? window : global;
 globalRootCharts.ChartManager = {
   renderPieChart,
   renderBarChart,
   renderHorizontalBarChart,
+  renderAnalysisCharts,
   destroyAllCharts
 };
+globalRootCharts.renderAnalysisCharts = renderAnalysisCharts;

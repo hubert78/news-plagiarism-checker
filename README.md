@@ -19,7 +19,12 @@ Converted from a server-dependent Streamlit app into a **streamlined web applica
   - **Visual Analytics**: Cohesive, calm Chart.js charts for duplication rates, category distribution, and publication date timelines.
   - **Internal Duplication Audit**: Detects repeated stories published under different URLs within the same news organization.
 - **Direct Text Comparison**: Paste any two passages or articles for instant TF-IDF similarity calculation.
-- **Dataset Management**: Import custom JSON or CSV scraped news datasets.
+- **Redesigned Results Dashboard**:
+  - **Dynamic Status Hero & KPI Stats**: Real-time summary showing scanned article counts, suspect pair counts, peak similarity score, and detection thresholds.
+  - **Interactive Comparative Cards & Table Modes**: Toggle between comparative card previews with excerpts and high-density tables.
+  - **Severity & Keyword Filtering**: Filter flagged articles by headline keywords and risk levels (Critical &ge;85%, Moderate 70-84%).
+  - **Reassuring Zero-State with Closest Matches**: Clear editorial integrity card with one-click sensitivity threshold adjuster and top near-matches previews.
+  - **CSV Report Export**: Download full detection reports for compliance and archiving.
 - **Client-Side NLP Engine**:
   - Text cleaning (HTML removal, punctuation stripping, lowercasing).
   - 179-word NLTK English stopword filtering.
@@ -54,11 +59,11 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for full details.
 
 ## 🛠️ Local Development & Testing
 
-Run a local server with Python:
+Run the local server with the Python scraping API:
 ```bash
-python -m http.server 8000
+python server.py
 ```
-Then visit [http://localhost:8000](http://localhost:8000) in your browser.
+Then visit [http://localhost:8000](http://localhost:8000) in your browser. (Do not use `python -m http.server`, as it does not support `POST /api/scrape` API requests).
 
 ---
 
