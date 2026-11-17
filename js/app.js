@@ -92,7 +92,7 @@ let state = {
   activeCategories: new Set(["news"]),
   startDate: formatDate(today),
   endDate: formatDate(threeDaysAgo),
-  threshold: 10,
+  threshold: 50,
   activeTab: "analysis",
   activeView: "charts",
   pairsFilter: "all",
@@ -408,7 +408,7 @@ function initResetButton() {
   document.getElementById("reset-btn")?.addEventListener("click", () => {
     state.source1 = "3News";
     state.source2 = "MyJoyOnline";
-    state.threshold = 10;
+    state.threshold = 50;
     state.activeCategories = new Set(["news"]);
     state.articles = [];
     state.activeView = "charts";
@@ -419,13 +419,13 @@ function initResetButton() {
 
     const slider = document.getElementById("threshold-slider");
     const valDisp = document.getElementById("threshold-value");
-    if (slider) slider.value = 10;
-    if (valDisp) valDisp.textContent = "10%";
+    if (slider) slider.value = 50;
+    if (valDisp) valDisp.textContent = "50%";
 
     const presets = document.querySelectorAll(".btn-thresh-preset");
     presets.forEach(btn => {
       const bVal = parseInt(btn.dataset.val, 10);
-      if (bVal === 10) {
+      if (bVal === 50) {
         btn.classList.add("bg-emerald-600", "text-white");
         btn.classList.remove("bg-slate-100", "text-slate-700");
       } else {

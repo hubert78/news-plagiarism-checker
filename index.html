@@ -330,7 +330,7 @@
               </svg>
             </div>
             <div class="flex items-baseline gap-2">
-              <span id="kpi-threshold-level" class="text-2xl font-black text-slate-900">10%</span>
+              <span id="kpi-threshold-level" class="text-2xl font-black text-slate-900">50%</span>
               <span class="text-xs font-medium text-slate-500">threshold</span>
             </div>
             <span class="text-[11px] font-semibold text-slate-500 mt-1">Cosine dot-product</span>
@@ -344,25 +344,25 @@
             <span class="text-xs font-bold text-slate-800 uppercase tracking-wide">Threshold:</span>
             <span id="threshold-value"
               class="text-xs font-black text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md">
-              10%
+              50%
             </span>
           </div>
 
           <div class="flex-grow flex items-center gap-2 max-w-md w-full px-1">
             <span class="text-[10px] font-bold text-slate-400">10%</span>
-            <input type="range" id="threshold-slider" min="10" max="100" value="10" class="w-full cursor-pointer">
+            <input type="range" id="threshold-slider" min="10" max="100" value="50" class="w-full cursor-pointer">
             <span class="text-[10px] font-bold text-slate-400">100%</span>
           </div>
 
           <div class="flex items-center gap-1.5 self-end sm:self-auto">
             <button type="button"
-              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-emerald-600 text-white"
+              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
               data-val="10">10%</button>
             <button type="button"
               class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
               data-val="25">25%</button>
             <button type="button"
-              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
+              class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-emerald-600 text-white"
               data-val="50">50%</button>
             <button type="button"
               class="btn-thresh-preset px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700"
