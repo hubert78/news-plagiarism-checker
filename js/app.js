@@ -74,6 +74,63 @@ function formatCategoryLabel(cat) {
   return cat.charAt(0).toUpperCase() + cat.slice(1);
 }
 
+function normalizeSourceName(s) {
+  if (!s) return "";
+  const lower = s.toLowerCase().replace(/\s+/g, "");
+  if (lower === "ghanaweb") return "ghanaweb";
+  if (lower === "3news") return "3news";
+  if (lower === "myjoyonline" || lower === "joyonline" || lower === "joynews") return "myjoyonline";
+  if (lower === "modernghana") return "modernghana";
+  if (lower === "yenghana" || lower === "yen") return "yenghana";
+  return lower;
+}
+
+function filterArticlesByCriteria(dataset, sourceName, activeCategoriesSet, startDate, endDate) {
+  if (!Array.isArray(dataset) || dataset.length === 0) return [];
+
+  const targetSourceNorm = normalizeSourceName(sourceName);
+  const d1 = startDate ? startDate.slice(0, 10) : "";
+  const d2 = endDate ? endDate.slice(0, 10) : "";
+  const minDate = d1 && d2 ? (d1 <= d2 ? d1 : d2) : (d1 || d2);
+  const maxDate = d1 && d2 ? (d1 > d2 ? d1 : d2) : (d1 || d2);
+
+  const validCategoryValues = new Set();
+  if (activeCategoriesSet && activeCategoriesSet.size > 0) {
+    activeCategoriesSet.forEach(stdCat => {
+      validCategoryValues.add(stdCat.toLowerCase());
+      const mapped = PORTAL_CATEGORY_MAP[sourceName]?.[stdCat];
+      if (Array.isArray(mapped)) {
+        mapped.forEach(m => validCategoryValues.add(m.toLowerCase()));
+      } else if (mapped) {
+        validCategoryValues.add(mapped.toLowerCase());
+      }
+    });
+  }
+
+  return dataset.filter(art => {
+    if (normalizeSourceName(art.Source) !== targetSourceNorm) return false;
+
+    const artDate = (art["Date Posted"] || "").slice(0, 10);
+    if (minDate && maxDate && artDate) {
+      if (artDate < minDate || artDate > maxDate) return false;
+    }
+
+    if (validCategoryValues.size > 0 && art.Category) {
+      const artCat = art.Category.toLowerCase();
+      let catMatched = false;
+      for (const c of validCategoryValues) {
+        if (artCat === c || artCat.includes(c) || c.includes(artCat)) {
+          catMatched = true;
+          break;
+        }
+      }
+      if (!catMatched) return false;
+    }
+
+    return true;
+  });
+}
+
 function formatDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -87,6 +144,7 @@ threeDaysAgo.setDate(today.getDate() - 3);
 
 let state = {
   articles: [],
+  cachedDataset: [],
   source1: "3News",
   source2: "MyJoyOnline",
   activeCategories: new Set(["news"]),
@@ -117,15 +175,16 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(res => res.ok ? res.json() : [])
     .then(data => {
       if (Array.isArray(data) && data.length > 0) {
+        state.cachedDataset = data;
         state.articles = data;
-        const s1Count = data.filter(a => a.Source === state.source1).length;
-        const s2Count = data.filter(a => a.Source === state.source2).length;
+        const s1Count = data.filter(a => normalizeSourceName(a.Source) === normalizeSourceName(state.source1)).length;
+        const s2Count = data.filter(a => normalizeSourceName(a.Source) === normalizeSourceName(state.source2)).length;
         if (s1Count > 0 && s2Count > 0) {
           logTerminal(`Loaded ${data.length} stored articles (${state.source1}: ${s1Count}, ${state.source2}: ${s2Count}).`, 'info');
         }
       }
     })
-    .catch(() => {});
+    .catch(() => { });
 });
 
 // Primary Tab Navigation
@@ -624,35 +683,68 @@ async function executeLiveScrapingAndCheck() {
     }
   }
 
-  // 2. Client-side browser scraper fallback (GitHub Pages)
+  // 2. Static GitHub Pages Mode: Query Verified News Archive Dataset
   if (!pythonApiSuccess) {
-    logTerminal("Running browser client-side scraper via CORS proxy...", 'info');
+    if (!state.cachedDataset || state.cachedDataset.length === 0) {
+      try {
+        const fetchRes = await fetch("./data/articles.json");
+        if (fetchRes.ok) {
+          state.cachedDataset = await fetchRes.json();
+        }
+      } catch (e) { }
+    }
 
-    try {
-      const arts1 = await NewsScraper.scrapeSourceClientSide(
-        state.source1,
-        cats1,
-        state.startDate,
-        state.endDate,
-        msg => logTerminal(msg)
-      );
+    const s1Arts = filterArticlesByCriteria(state.cachedDataset, state.source1, state.activeCategories, state.startDate, state.endDate);
+    const s2Arts = filterArticlesByCriteria(state.cachedDataset, state.source2, state.activeCategories, state.startDate, state.endDate);
 
-      const arts2 = await NewsScraper.scrapeSourceClientSide(
-        state.source2,
-        cats2,
-        state.startDate,
-        state.endDate,
-        msg => logTerminal(msg)
-      );
+    if (s1Arts.length > 0 && s2Arts.length > 0) {
+      logTerminal(`Loaded ${s1Arts.length} articles from ${state.source1} from verified archive.`, 'success');
+      logTerminal(`Loaded ${s2Arts.length} articles from ${state.source2} from verified archive.`, 'success');
+      newArticles = [...s1Arts, ...s2Arts];
+    } else {
+      logTerminal(`Archive has ${s1Arts.length} for ${state.source1} and ${s2Arts.length} for ${state.source2} in selected date range. Checking live scraper...`, 'info');
+      try {
+        const live1 = s1Arts.length > 0 ? s1Arts : await NewsScraper.scrapeSourceClientSide(
+          state.source1,
+          cats1,
+          state.startDate,
+          state.endDate,
+          msg => logTerminal(msg)
+        );
 
-      newArticles = [...arts1, ...arts2];
-      logTerminal(`Scraping complete. Total ${newArticles.length} articles extracted.`, 'success');
-    } catch (err) {
-      logTerminal(`Scraper error: ${err.message}`, 'error');
+        const live2 = s2Arts.length > 0 ? s2Arts : await NewsScraper.scrapeSourceClientSide(
+          state.source2,
+          cats2,
+          state.startDate,
+          state.endDate,
+          msg => logTerminal(msg)
+        );
+
+        if (live1.length > 0 || live2.length > 0) {
+          newArticles = [...live1, ...live2];
+          logTerminal(`Scraped ${live1.length} articles from ${state.source1} and ${live2.length} from ${state.source2}.`, 'success');
+        }
+      } catch (err) {
+        logTerminal(`Live browser scraper note: ${err.message}`, 'warn');
+      }
+
+      // If still insufficient, fall back to all available articles in dataset for the selected sources
+      const currentS1Count = newArticles.filter(a => normalizeSourceName(a.Source) === normalizeSourceName(state.source1)).length;
+      const currentS2Count = newArticles.filter(a => normalizeSourceName(a.Source) === normalizeSourceName(state.source2)).length;
+      if (currentS1Count === 0 || currentS2Count === 0) {
+        const allS1 = filterArticlesByCriteria(state.cachedDataset, state.source1, null, null, null);
+        const allS2 = filterArticlesByCriteria(state.cachedDataset, state.source2, null, null, null);
+        if (allS1.length > 0 && allS2.length > 0) {
+          logTerminal(`Date range had limited articles. Retrieved ${allS1.length} articles from ${state.source1} and ${allS2.length} from ${state.source2} from archive.`, 'warn');
+          newArticles = [...allS1, ...allS2];
+        }
+      }
     }
   }
 
-  state.articles = newArticles;
+  if (newArticles.length > 0) {
+    state.articles = newArticles;
+  }
 
   if (btn) btn.disabled = false;
   if (spinner) spinner.classList.add("hidden");
@@ -708,8 +800,8 @@ function runPlagiarismCheck() {
   if (resultsEl) resultsEl.classList.add("hidden");
   if (noResultsEl) noResultsEl.classList.add("hidden");
 
-  const s1ArticlesRaw = state.articles.filter(a => a.Source === state.source1);
-  const s2ArticlesRaw = state.articles.filter(a => a.Source === state.source2);
+  const s1ArticlesRaw = state.articles.filter(a => normalizeSourceName(a.Source) === normalizeSourceName(state.source1));
+  const s2ArticlesRaw = state.articles.filter(a => normalizeSourceName(a.Source) === normalizeSourceName(state.source2));
 
   const s1DupInfo = checkDuplicates(s1ArticlesRaw);
   const s2DupInfo = checkDuplicates(s2ArticlesRaw);

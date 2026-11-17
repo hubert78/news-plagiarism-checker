@@ -4,8 +4,9 @@
  */
 
 const CORS_PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`
 ];
 
 async function fetchWithProxy(targetUrl) {
@@ -14,7 +15,21 @@ async function fetchWithProxy(targetUrl) {
       const proxied = proxyFn(targetUrl);
       const res = await fetch(proxied, { signal: AbortSignal.timeout(10000) });
       if (res.ok) {
-        return await res.text();
+        const text = await res.text();
+        // Reject proxy marketing landing pages or blocked error pages masquerading as 200 OK
+        if (
+          text.includes("CORSPROXY") ||
+          text.includes("corsproxy.io") ||
+          text.includes("data-astro-cid") ||
+          text.includes("api.codetabs.com") ||
+          text.includes("<title>Access denied") ||
+          text.includes("Just a moment...")
+        ) {
+          continue;
+        }
+        if (text.length > 200) {
+          return text;
+        }
       }
     } catch (e) {
       // try next proxy
@@ -230,10 +245,10 @@ async function scrape3News(category, startDate, endDate, onProgress) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     let articleEls = Array.from(doc.querySelectorAll('article'));
     if (articleEls.length === 0) {
-      articleEls = Array.from(doc.querySelectorAll('h2.entry-title, h3.entry-title, .td-module-title'));
+      articleEls = Array.from(doc.querySelectorAll('h2.entry-title, h3.entry-title, .td-module-title, h2, h3'));
     }
 
-    for (const art of articleEls.slice(0, 10)) {
+    for (const art of articleEls.slice(0, 25)) {
       const h = art.querySelector('h1, h2, h3, h4');
       let a = h ? h.querySelector('a') : null;
       if (!a) {
@@ -290,12 +305,26 @@ async function scrapeMyJoyOnline(category, startDate, endDate, onProgress) {
   try {
     const html = await fetchWithProxy(url);
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('div.home-section-story-list a, div.story-list a, article.post a, h4 a, h3 a')).slice(0, 6);
+    const candidateEls = Array.from(doc.querySelectorAll('div.home-section-story-list a, div.story-list a, article a, h4 a, h3 a, h2 a'));
+    const seenLinks = new Set();
+    const links = [];
+    for (const a of candidateEls) {
+      let href = a.getAttribute('href');
+      const title = (a.querySelector('h4, h3, h2') || a).textContent.trim();
+      if (!href || !title || title.length < 15) continue;
+      if (!href.startsWith('http')) {
+        href = new URL(href, 'https://www.myjoyonline.com').href;
+      }
+      if (seenLinks.has(href)) continue;
+      const path = href.replace('https://www.myjoyonline.com', '').replace(/^\/+|\/+$/g, '');
+      if (!path || path === category || path === 'news' || path === 'business' || path === 'entertainment') continue;
+      seenLinks.add(href);
+      links.push({ href, title });
+      if (links.length >= 25) break;
+    }
 
-    for (const a of links) {
-      const title = (a.querySelector('h4, h3') || a).textContent.trim();
-      const href = a.getAttribute('href');
-      if (!href || !title || title.length < 10) continue;
+    for (const item of links) {
+      const { title, href } = item;
 
       onProgress(`MyJoyOnline: Fetching "${title.slice(0, 40)}..."`);
       try {
