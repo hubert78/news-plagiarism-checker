@@ -1,6 +1,6 @@
 /**
  * Client-Side Web Scraper Engine for Ghanaian News Portals
- * Replicates the BeautifulSoup logic in scraper.py using browser DOMParser and CORS proxies.
+ * Matches the updated cascading extraction logic in scraper.py using browser DOMParser and CORS proxies.
  */
 
 const CORS_PROXIES = [
@@ -21,6 +21,72 @@ async function fetchWithProxy(targetUrl) {
     }
   }
   throw new Error(`Failed to fetch ${targetUrl} via CORS proxies.`);
+}
+
+/**
+ * Robust cascading article body extractor
+ */
+function extractArticleContent(doc) {
+  if (!doc) return "";
+
+  // Remove scripts, styles, ads
+  doc.querySelectorAll('script, style, nav, footer, aside, noscript, svg, form, .advert, .inline-ad, .share, .comment, .widget').forEach(el => el.remove());
+
+  const selectors = [
+    'p#article-123',
+    'div#article-123',
+    'div#article-text',
+    'div.entry-content',
+    'div.article-content',
+    'div.td-post-content',
+    'div.post__content',
+    'div.article-text',
+    'div.story-content',
+    'div.article-details',
+    'div#medsection2',
+    'article'
+  ];
+
+  for (const sel of selectors) {
+    const el = doc.querySelector(sel);
+    if (el) {
+      const paras = Array.from(el.querySelectorAll('p'))
+        .map(p => p.textContent.trim())
+        .filter(t => t.length > 20);
+      const text = paras.join(" ");
+      if (text.length > 80) return text;
+    }
+  }
+
+  // Fallback: collect all paragraphs in doc
+  const allParas = Array.from(doc.querySelectorAll('p'))
+    .map(p => p.textContent.trim())
+    .filter(t => t.length > 25);
+  const fallback = allParas.join(" ");
+  return fallback.length > 80 ? fallback : "";
+}
+
+function extractArticleDate(doc, fallbackDate) {
+  if (!doc) return fallbackDate;
+
+  // 1. Meta published time
+  const meta = doc.querySelector('meta[property*="published_time"], meta[property*="pubdate"], meta[name*="date"]');
+  if (meta && meta.getAttribute('content')) {
+    const val = meta.getAttribute('content').split('T')[0];
+    if (val && val.length === 10) return val;
+  }
+
+  // 2. Time tag
+  const timeEl = doc.querySelector('time');
+  if (timeEl) {
+    const dt = timeEl.getAttribute('datetime') || timeEl.getAttribute('content');
+    if (dt) {
+      const val = dt.split('T')[0];
+      if (val && val.length === 10) return val;
+    }
+  }
+
+  return fallbackDate;
 }
 
 /**
@@ -45,38 +111,36 @@ async function scrapeGhanaweb(category, startDate, endDate, onProgress) {
     try {
       const html = await fetchWithProxy(archiveUrl);
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const upperDiv = doc.querySelector('div.upper');
-      
-      if (upperDiv) {
-        const links = Array.from(upperDiv.querySelectorAll('a')).slice(0, 5);
-        for (const a of links) {
-          const title = (a.getAttribute('title') || a.textContent || '').trim();
-          let href = a.getAttribute('href');
-          if (!href || !title) continue;
-          if (!href.startsWith('http')) {
-            href = new URL(href, 'https://www.ghanaweb.com').href;
-          }
+      const container = doc.querySelector('div.upper') || doc.querySelector('div.article-list') || doc;
+      const links = Array.from(container.querySelectorAll('a[href*="artikel.php"], a[href*="/NewsArchive/"], a[href*="/business/"]')).slice(0, 5);
 
-          onProgress(`Ghanaweb: Fetching article "${title.slice(0, 40)}..."`);
-          try {
-            const artHtml = await fetchWithProxy(href);
-            const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
-            const contentEl = artDoc.querySelector('p#article-123') || artDoc.querySelector('div#medsection2');
-            const content = contentEl ? contentEl.textContent.trim() : '';
+      for (const a of links) {
+        const title = (a.getAttribute('title') || a.textContent || '').trim();
+        let href = a.getAttribute('href');
+        if (!href || !title || title.length < 10) continue;
+        if (!href.startsWith('http')) {
+          href = new URL(href, 'https://www.ghanaweb.com').href;
+        }
 
-            if (content.length > 80) {
-              articles.push({
-                Source: 'Ghanaweb',
-                Category: category,
-                'Date Posted': isoDate,
-                Title: title,
-                URL: href,
-                Content: content
-              });
-            }
-          } catch (err) {
-            // continue
+        onProgress(`Ghanaweb: Fetching "${title.slice(0, 40)}..."`);
+        try {
+          const artHtml = await fetchWithProxy(href);
+          const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
+          const content = extractArticleContent(artDoc);
+          const datePosted = extractArticleDate(artDoc, isoDate);
+
+          if (content) {
+            articles.push({
+              Source: 'Ghanaweb',
+              Category: category,
+              'Date Posted': datePosted,
+              Title: title,
+              URL: href,
+              Content: content
+            });
           }
+        } catch (err) {
+          // continue
         }
       }
     } catch (err) {
@@ -111,38 +175,36 @@ async function scrapeModernGhana(startDate, endDate, onProgress) {
     try {
       const html = await fetchWithProxy(archiveUrl);
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const archiveDiv = doc.querySelector('div.news-archive2') || doc.querySelector('div.row.news-archive2');
-      
-      if (archiveDiv) {
-        const links = Array.from(archiveDiv.querySelectorAll('a')).slice(0, 5);
-        for (const a of links) {
-          const title = a.textContent.trim();
-          let href = a.getAttribute('href');
-          if (!href || !title) continue;
-          if (!href.startsWith('http')) {
-            href = new URL(href, 'https://www.modernghana.com').href;
-          }
+      const container = doc.querySelector('div.news-archive2') || doc.querySelector('div.col-left') || doc;
+      const links = Array.from(container.querySelectorAll('a[href*="/news/"], a[href*="/sports/"]')).slice(0, 5);
 
-          onProgress(`Modern Ghana: Fetching article "${title.slice(0, 40)}..."`);
-          try {
-            const artHtml = await fetchWithProxy(href);
-            const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
-            const contentEl = artDoc.querySelector('div#article-123') || artDoc.querySelector('div.article-content');
-            const content = contentEl ? contentEl.textContent.trim() : '';
+      for (const a of links) {
+        const title = a.textContent.trim();
+        let href = a.getAttribute('href');
+        if (!href || !title || title.length < 10) continue;
+        if (!href.startsWith('http')) {
+          href = new URL(href, 'https://www.modernghana.com').href;
+        }
 
-            if (content.length > 80) {
-              articles.push({
-                Source: 'Modern Ghana',
-                Category: 'general',
-                'Date Posted': isoDate,
-                Title: title,
-                URL: href,
-                Content: content
-              });
-            }
-          } catch (err) {
-            // continue
+        onProgress(`Modern Ghana: Fetching "${title.slice(0, 40)}..."`);
+        try {
+          const artHtml = await fetchWithProxy(href);
+          const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
+          const content = extractArticleContent(artDoc);
+          const datePosted = extractArticleDate(artDoc, isoDate);
+
+          if (content) {
+            articles.push({
+              Source: 'Modern Ghana',
+              Category: 'general',
+              'Date Posted': datePosted,
+              Title: title,
+              URL: href,
+              Content: content
+            });
           }
+        } catch (err) {
+          // continue
         }
       }
     } catch (err) {
@@ -166,28 +228,25 @@ async function scrape3News(category, startDate, endDate, onProgress) {
   try {
     const html = await fetchWithProxy(url);
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const h3s = Array.from(doc.querySelectorAll('h3.entry-title a, article h3 a')).slice(0, 6);
+    const links = Array.from(doc.querySelectorAll('h2.entry-title a, h3.entry-title a, article h3 a, .td-module-title a')).slice(0, 6);
 
-    for (const a of h3s) {
+    for (const a of links) {
       const title = a.textContent.trim();
       const href = a.getAttribute('href');
-      if (!href || !title) continue;
+      if (!href || !title || title.length < 10) continue;
 
-      onProgress(`3News: Fetching article "${title.slice(0, 40)}..."`);
+      onProgress(`3News: Fetching "${title.slice(0, 40)}..."`);
       try {
         const artHtml = await fetchWithProxy(href);
         const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
-        const contentEl = artDoc.querySelector('div.td-post-content') || artDoc.querySelector('div.entry-content');
-        const content = contentEl ? contentEl.textContent.trim() : '';
+        const content = extractArticleContent(artDoc);
+        const datePosted = extractArticleDate(artDoc, startDate);
 
-        const timeEl = artDoc.querySelector('time.entry-date');
-        const datePosted = timeEl ? timeEl.getAttribute('datetime')?.split('T')[0] : startDate;
-
-        if (content.length > 80) {
+        if (content) {
           articles.push({
             Source: '3News',
             Category: category,
-            'Date Posted': datePosted || startDate,
+            'Date Posted': datePosted,
             Title: title,
             URL: href,
             Content: content
@@ -215,26 +274,25 @@ async function scrapeMyJoyOnline(category, startDate, endDate, onProgress) {
   try {
     const html = await fetchWithProxy(url);
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('div.home-section-story-list a, div.story-list a')).slice(0, 6);
+    const links = Array.from(doc.querySelectorAll('div.home-section-story-list a, div.story-list a, article.post a, h4 a, h3 a')).slice(0, 6);
 
     for (const a of links) {
-      const h4 = a.querySelector('h4') || a.querySelector('h3');
-      const title = h4 ? h4.textContent.trim() : a.textContent.trim();
+      const title = (a.querySelector('h4, h3') || a).textContent.trim();
       const href = a.getAttribute('href');
       if (!href || !title || title.length < 10) continue;
 
-      onProgress(`MyJoyOnline: Fetching article "${title.slice(0, 40)}..."`);
+      onProgress(`MyJoyOnline: Fetching "${title.slice(0, 40)}..."`);
       try {
         const artHtml = await fetchWithProxy(href);
         const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
-        const contentEl = artDoc.querySelector('div#article-text') || artDoc.querySelector('div.article-content');
-        const content = contentEl ? contentEl.textContent.trim() : '';
+        const content = extractArticleContent(artDoc);
+        const datePosted = extractArticleDate(artDoc, startDate);
 
-        if (content.length > 80) {
+        if (content) {
           articles.push({
             Source: 'MyJoyOnline',
             Category: category,
-            'Date Posted': startDate,
+            'Date Posted': datePosted,
             Title: title,
             URL: href,
             Content: content
@@ -246,6 +304,55 @@ async function scrapeMyJoyOnline(category, startDate, endDate, onProgress) {
     }
   } catch (err) {
     console.warn(`Could not scrape MyJoyOnline:`, err);
+  }
+
+  return articles;
+}
+
+/**
+ * Scrape Yen Ghana
+ */
+async function scrapeYenGhana(category, startDate, endDate, onProgress) {
+  const articles = [];
+  const url = `https://yen.com.gh/${category.toLowerCase()}/`;
+  onProgress(`Yen Ghana: Fetching feed for ${category}...`);
+
+  try {
+    const html = await fetchWithProxy(url);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const cards = Array.from(doc.querySelectorAll('article a, div.article-card a')).slice(0, 6);
+
+    for (const a of cards) {
+      const title = (a.getAttribute('title') || a.textContent || '').trim();
+      let href = a.getAttribute('href');
+      if (!href || !title || title.length < 10) continue;
+      if (!href.startsWith('http')) {
+        href = new URL(href, 'https://yen.com.gh').href;
+      }
+
+      onProgress(`Yen Ghana: Fetching "${title.slice(0, 40)}..."`);
+      try {
+        const artHtml = await fetchWithProxy(href);
+        const artDoc = new DOMParser().parseFromString(artHtml, 'text/html');
+        const content = extractArticleContent(artDoc);
+        const datePosted = extractArticleDate(artDoc, startDate);
+
+        if (content) {
+          articles.push({
+            Source: 'Yen Ghana',
+            Category: category,
+            'Date Posted': datePosted,
+            Title: title,
+            URL: href,
+            Content: content
+          });
+        }
+      } catch (err) {
+        // continue
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not scrape Yen Ghana:`, err);
   }
 
   return articles;
@@ -277,6 +384,12 @@ async function scrapeSourceClientSide(source, categories, startDate, endDate, on
       const cats = categories.length ? categories : ['news', 'business'];
       for (const cat of cats) {
         const arts = await scrapeMyJoyOnline(cat, startDate, endDate, onProgress);
+        results = results.concat(arts);
+      }
+    } else if (source === 'Yen Ghana') {
+      const cats = categories.length ? categories : ['Ghana'];
+      for (const cat of cats) {
+        const arts = await scrapeYenGhana(cat, startDate, endDate, onProgress);
         results = results.concat(arts);
       }
     }

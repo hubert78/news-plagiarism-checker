@@ -1,6 +1,6 @@
 /**
  * Main Application Controller for News Plagiarism Checker
- * Supports both Local Python Scraper API and Client-Side Proxy Scraper
+ * Pure Live Web Scraping Mode (No Archived Dataset)
  */
 
 const SOURCE_CATEGORIES = {
@@ -13,34 +13,43 @@ const SOURCE_CATEGORIES = {
 
 const ALL_SOURCES = Object.keys(SOURCE_CATEGORIES);
 
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const today = new Date();
+const threeDaysAgo = new Date(today);
+threeDaysAgo.setDate(today.getDate() - 3);
+
 let state = {
   articles: [],
   source1: "Ghanaweb",
   source2: "3News",
   source1Categories: [...SOURCE_CATEGORIES["Ghanaweb"]],
   source2Categories: [...SOURCE_CATEGORIES["3News"]],
-  source1StartDate: "2024-08-15",
-  source1EndDate: "2024-08-30",
-  source2StartDate: "2024-08-15",
-  source2EndDate: "2024-08-30",
+  source1StartDate: formatDate(today),
+  source1EndDate: formatDate(threeDaysAgo),
+  source2StartDate: formatDate(today),
+  source2EndDate: formatDate(threeDaysAgo),
   threshold: 70,
-  scrapeMode: "archive", // 'archive' or 'live'
   activeTab: "analysis",
   activeView: "table"
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
+  initDateInputs();
   initSelectors();
   initSliders();
-  initModeToggle();
   initResultTabs();
   initFileUpload();
   initQuickCompare();
-  loadDefaultData();
 });
 
-// Primary Tab Navigation (Analysis, Quick Compare, Dataset, Methodology)
+// Primary Tab Navigation (Comparison, Quick Compare, Dataset, Methodology)
 function initTabs() {
   const tabs = document.querySelectorAll(".nav-tab");
   tabs.forEach(tab => {
@@ -60,6 +69,23 @@ function initTabs() {
       if (activeContent) activeContent.classList.remove("hidden");
     });
   });
+}
+
+function initDateInputs() {
+  const s1Start = document.getElementById("s1-start-date");
+  const s1End = document.getElementById("s1-end-date");
+  const s2Start = document.getElementById("s2-start-date");
+  const s2End = document.getElementById("s2-end-date");
+
+  if (s1Start) s1Start.value = state.source1StartDate;
+  if (s1End) s1End.value = state.source1EndDate;
+  if (s2Start) s2Start.value = state.source2StartDate;
+  if (s2End) s2End.value = state.source2EndDate;
+
+  s1Start?.addEventListener("change", (e) => state.source1StartDate = e.target.value);
+  s1End?.addEventListener("change", (e) => state.source1EndDate = e.target.value);
+  s2Start?.addEventListener("change", (e) => state.source2StartDate = e.target.value);
+  s2End?.addEventListener("change", (e) => state.source2EndDate = e.target.value);
 }
 
 // Result Views Navigation (Table, Charts, Duplicates)
@@ -84,30 +110,6 @@ function initResultTabs() {
   });
 }
 
-// Mode Toggle: Archived Dataset vs Live Web Scraper
-function initModeToggle() {
-  const btnArchive = document.getElementById("mode-archive-btn");
-  const btnScrape = document.getElementById("mode-scrape-btn");
-  const btnLabel = document.getElementById("btn-label");
-  const liveTerminal = document.getElementById("live-terminal");
-
-  btnArchive?.addEventListener("click", () => {
-    state.scrapeMode = "archive";
-    btnArchive.className = "px-2.5 py-1 rounded-md font-medium bg-white text-slate-900 shadow-xs transition-colors";
-    btnScrape.className = "px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-900 transition-colors";
-    if (btnLabel) btnLabel.textContent = "Run Plagiarism Check";
-    if (liveTerminal) liveTerminal.classList.add("hidden");
-  });
-
-  btnScrape?.addEventListener("click", () => {
-    state.scrapeMode = "live";
-    btnScrape.className = "px-2.5 py-1 rounded-md font-medium bg-white text-slate-900 shadow-xs transition-colors";
-    btnArchive.className = "px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-900 transition-colors";
-    if (btnLabel) btnLabel.textContent = "Scrape & Analyze";
-    if (liveTerminal) liveTerminal.classList.remove("hidden");
-  });
-}
-
 // Terminal Log Helper
 function logTerminal(message, type = 'info') {
   const terminal = document.getElementById("live-terminal");
@@ -118,7 +120,7 @@ function logTerminal(message, type = 'info') {
 
   const line = document.createElement("div");
   const timestamp = new Date().toLocaleTimeString();
-  
+
   let prefix = '>';
   let color = 'text-slate-300';
   if (type === 'success') { prefix = '✓'; color = 'text-emerald-400 font-medium'; }
@@ -129,49 +131,6 @@ function logTerminal(message, type = 'info') {
   line.innerHTML = `<span class="text-slate-500 select-none">${timestamp}</span> <span>${prefix}</span> <span>${message}</span>`;
   logBox.appendChild(line);
   logBox.scrollTop = logBox.scrollHeight;
-}
-
-// Load default dataset
-async function loadDefaultData() {
-  try {
-    const res = await fetch("./data/articles.json");
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-    const data = await res.json();
-    state.articles = data;
-
-    updateDateRangesFromData();
-    runPlagiarismCheck(); // Run initial baseline
-  } catch (err) {
-    console.warn("Could not load default dataset:", err);
-  }
-}
-
-function updateDateRangesFromData() {
-  if (!state.articles || state.articles.length === 0) return;
-  const dates = state.articles
-    .map(a => a["Date Posted"])
-    .filter(Boolean)
-    .sort();
-
-  if (dates.length > 0) {
-    const minDate = dates[0];
-    const maxDate = dates[dates.length - 1];
-
-    state.source1StartDate = minDate;
-    state.source1EndDate = maxDate;
-    state.source2StartDate = minDate;
-    state.source2EndDate = maxDate;
-
-    const s1Start = document.getElementById("s1-start-date");
-    const s1End = document.getElementById("s1-end-date");
-    const s2Start = document.getElementById("s2-start-date");
-    const s2End = document.getElementById("s2-end-date");
-
-    if (s1Start) s1Start.value = minDate;
-    if (s1End) s1End.value = maxDate;
-    if (s2Start) s2Start.value = minDate;
-    if (s2End) s2End.value = maxDate;
-  }
 }
 
 // Initialize Selectors
@@ -196,17 +155,8 @@ function initSelectors() {
   renderCategoriesUI(1);
   renderCategoriesUI(2);
 
-  document.getElementById("s1-start-date")?.addEventListener("change", (e) => state.source1StartDate = e.target.value);
-  document.getElementById("s1-end-date")?.addEventListener("change", (e) => state.source1EndDate = e.target.value);
-  document.getElementById("s2-start-date")?.addEventListener("change", (e) => state.source2StartDate = e.target.value);
-  document.getElementById("s2-end-date")?.addEventListener("change", (e) => state.source2EndDate = e.target.value);
-
   document.getElementById("run-check-btn")?.addEventListener("click", () => {
-    if (state.scrapeMode === "live") {
-      executeLiveScrapingAndCheck();
-    } else {
-      runPlagiarismCheck();
-    }
+    executeLiveScrapingAndCheck();
   });
 }
 
@@ -274,7 +224,6 @@ function initSliders() {
   });
 }
 
-// Check duplicates function
 function checkDuplicates(articlesList) {
   const seenUrls = new Set();
   const cleaned = [];
@@ -294,20 +243,21 @@ function checkDuplicates(articlesList) {
 }
 
 /**
- * Execute Functional Scraping:
- * Tries local Python API (/api/scrape) first.
- * If running statically / on GitHub Pages, falls back to client-side proxy scraping.
+ * Functional Scraping Dispatcher
+ * Calls Python Scraper API if available, or browser client-side proxy scraper if on GitHub Pages
  */
 async function executeLiveScrapingAndCheck() {
   const btn = document.getElementById("run-check-btn");
   const spinner = document.getElementById("btn-spinner");
   const logBox = document.getElementById("terminal-logs");
-  if (logBox) logBox.innerHTML = "";
+  const terminal = document.getElementById("live-terminal");
 
+  if (logBox) logBox.innerHTML = "";
+  if (terminal) terminal.classList.remove("hidden");
   if (btn) btn.disabled = true;
   if (spinner) spinner.classList.remove("hidden");
 
-  logTerminal(`Starting live scrape for ${state.source1} and ${state.source2}...`);
+  logTerminal(`Initiating scraper for ${state.source1} and ${state.source2}...`);
 
   const payload = {
     source_1: state.source1,
@@ -327,31 +277,33 @@ async function executeLiveScrapingAndCheck() {
   let newArticles = [];
   let pythonApiSuccess = false;
 
-  // 1. Try local Python scraper endpoint
+  // 1. Try Python Scraper API
   try {
-    logTerminal("Probing local Python scraper API (http://localhost:8000/api/scrape)...");
+    logTerminal("Connecting to Python scraper API (/api/scrape)...");
     const res = await fetch("/api/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(4000)
+      signal: AbortSignal.timeout(5000)
     });
 
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
         pythonApiSuccess = true;
-        logTerminal(`Python scraper succeeded: Retrieved ${data.source1_count} from ${state.source1}, ${data.source2_count} from ${state.source2}.`, 'success');
+        logTerminal(`Scraped ${data.source1_count} articles from ${state.source1}.`, 'success');
+        logTerminal(`Scraped ${data.source2_count} articles from ${state.source2}.`, 'success');
         newArticles = [...(data.articles1 || []), ...(data.articles2 || [])];
       }
     }
   } catch (err) {
-    // Python server not running, continue to client-side scraper
+    // Continue to client-side scraper
   }
 
-  // 2. If Python server wasn't running, run client-side scraper
+  // 2. Client-side scraper fallback (GitHub Pages)
   if (!pythonApiSuccess) {
-    logTerminal("Local Python server not detected. Running client-side browser scraper via CORS proxy...", 'info');
+    logTerminal("Python server endpoint not detected (Static / GitHub Pages mode).", 'info');
+    logTerminal("Running browser client-side scraper via CORS proxy...", 'info');
 
     try {
       const arts1 = await NewsScraper.scrapeSourceClientSide(
@@ -371,31 +323,24 @@ async function executeLiveScrapingAndCheck() {
       );
 
       newArticles = [...arts1, ...arts2];
-      logTerminal(`Client-side scraping complete. Retrieved ${newArticles.length} live articles.`, 'success');
+      logTerminal(`Scraping finished. Total ${newArticles.length} articles extracted.`, 'success');
     } catch (err) {
-      logTerminal(`Client-side scraping encountered an error: ${err.message}`, 'error');
+      logTerminal(`Scraper error: ${err.message}`, 'error');
     }
   }
 
-  // Merge new articles into state
-  if (newArticles.length > 0) {
-    const seen = new Set(state.articles.map(a => a.URL));
-    newArticles.forEach(a => {
-      if (!seen.has(a.URL)) {
-        state.articles.unshift(a);
-        seen.add(a.URL);
-      }
-    });
-    showToast(`Scraped ${newArticles.length} fresh articles.`, "success");
-  } else {
-    logTerminal("No new articles could be scraped from live feeds. Using cached dataset archive.", 'warn');
-    showToast("Live scraping yielded 0 new articles. Analyzing cached archive.", "warning");
-  }
+  state.articles = newArticles;
 
   if (btn) btn.disabled = false;
   if (spinner) spinner.classList.add("hidden");
 
-  // Run analysis with current dataset
+  if (state.articles.length === 0) {
+    logTerminal("No articles were retrieved from the selected feeds. Check connection or date range.", 'warn');
+    showToast("No articles retrieved. Please check date range or connection.", "warning");
+    return;
+  }
+
+  showToast(`Successfully scraped ${state.articles.length} articles. Calculating similarities...`, "success");
   runPlagiarismCheck();
 }
 
@@ -409,25 +354,9 @@ function runPlagiarismCheck() {
   if (resultsEl) resultsEl.classList.add("hidden");
   if (noResultsEl) noResultsEl.classList.add("hidden");
 
-  // Filter Source 1
-  const s1ArticlesRaw = state.articles.filter(a => {
-    const matchSrc = a.Source === state.source1;
-    const matchCat = state.source1Categories.length === 0 || state.source1Categories.includes(a.Category);
-    const matchDate = (!state.source1StartDate || a["Date Posted"] >= state.source1StartDate) &&
-                      (!state.source1EndDate || a["Date Posted"] <= state.source1EndDate);
-    return matchSrc && matchCat && matchDate;
-  });
+  const s1ArticlesRaw = state.articles.filter(a => a.Source === state.source1);
+  const s2ArticlesRaw = state.articles.filter(a => a.Source === state.source2);
 
-  // Filter Source 2
-  const s2ArticlesRaw = state.articles.filter(a => {
-    const matchSrc = a.Source === state.source2;
-    const matchCat = state.source2Categories.length === 0 || state.source2Categories.includes(a.Category);
-    const matchDate = (!state.source2StartDate || a["Date Posted"] >= state.source2StartDate) &&
-                      (!state.source2EndDate || a["Date Posted"] <= state.source2EndDate);
-    return matchSrc && matchCat && matchDate;
-  });
-
-  // Check Duplicates
   const s1DupInfo = checkDuplicates(s1ArticlesRaw);
   const s2DupInfo = checkDuplicates(s2ArticlesRaw);
 
@@ -441,12 +370,11 @@ function runPlagiarismCheck() {
     if (noResultsEl) {
       noResultsEl.classList.remove("hidden");
       noResultsEl.querySelector("p").textContent = 
-        `No articles match your criteria for ${state.source1} (${s1Cleaned.length}) or ${state.source2} (${s2Cleaned.length}). Try selecting more categories or expanding the date range.`;
+        `Insufficient articles to compare. Scraped ${s1Cleaned.length} from ${state.source1} and ${s2Cleaned.length} from ${state.source2}.`;
     }
     return;
   }
 
-  // Combine datasets
   const combinedArticles = [...s1Cleaned, ...s2Cleaned];
 
   // Process text and TF-IDF
@@ -488,11 +416,11 @@ function runPlagiarismCheck() {
   renderWithinSourceTables(dataScores.withinSourcePairs, combinedArticles);
 
   if (resultsEl) resultsEl.classList.remove("hidden");
+  resultsEl.scrollIntoView({ behavior: "smooth" });
 }
 
 // Render Charts
 function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numPlagiarized, dataScores) {
-  // Proportions
   const s1Plagiarized = Math.min(numPlagiarized, s1Articles.length);
   const s1Unplagiarized = Math.max(0, s1Articles.length - s1Plagiarized);
   ChartManager.renderPieChart("chart-proportion-s1", state.source1, {
@@ -507,11 +435,9 @@ function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numP
     "Original": s2Unplagiarized
   }, 'plagiarism');
 
-  // Categories
   ChartManager.renderBarChart("chart-categories-s1", state.source1, dataScores.source1Categories || {}, '#0f172a');
   ChartManager.renderBarChart("chart-categories-s2", state.source2, dataScores.source2Categories || {}, '#334155');
 
-  // Internal Similar
   const withinPairs = dataScores.withinSourcePairs || {};
   const s1Similar = (withinPairs[state.source1] || []).length;
   const s2Similar = (withinPairs[state.source2] || []).length;
@@ -526,7 +452,6 @@ function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numP
     "Distinct": Math.max(0, s2Articles.length - s2Similar)
   }, 'similar');
 
-  // Duplicated URLs
   const s1DupCard = document.getElementById("dup-url-s1-container");
   const s2DupCard = document.getElementById("dup-url-s2-container");
 
@@ -550,7 +475,6 @@ function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numP
     s2DupCard.classList.add("hidden");
   }
 
-  // Dates
   ChartManager.renderHorizontalBarChart("chart-dates-s1", state.source1, dataScores.source1DateCount || {}, '#475569');
   ChartManager.renderHorizontalBarChart("chart-dates-s2", state.source2, dataScores.source2DateCount || {}, '#64748b');
 }
@@ -760,8 +684,7 @@ function initFileUpload() {
 
         if (Array.isArray(parsed) && parsed.length > 0) {
           state.articles = parsed;
-          updateDateRangesFromData();
-          showToast(`Loaded ${parsed.length} articles.`, "success");
+          showToast(`Loaded ${parsed.length} articles from file.`, "success");
           document.querySelector('[data-tab="analysis"]')?.click();
           runPlagiarismCheck();
         } else {

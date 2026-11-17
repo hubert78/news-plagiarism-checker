@@ -1,611 +1,533 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import os 
+import os
+import re
 import random
-from requests.exceptions import RequestException
-
-import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
-
-
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 
 def get_user_agent():
-    # List of user agents Custom headers to mimic a browser
     user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/88.0',
-        # Add more user agents
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
     ]
     return {
         'User-Agent': random.choice(user_agents),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
     }
 
-
 def check_duplicates(df):
+    if df is None or df.empty:
+        return df, 0
     initial_df_total = df.shape[0]
     duplicates = df.duplicated(subset=['URL']).sum()
-    df = df.drop_duplicates(subset=['URL'])
+    df = df.drop_duplicates(subset=['URL']).reset_index(drop=True)
     cleaned_df_total = df.shape[0]
-    st.info(f'{initial_df_total} articles retrieved.\n'
-            f'{duplicates} article(s) with duplicate URL(s) found.\n'
-            f'{cleaned_df_total} articles remain after cleaning.')
+    print(f"{initial_df_total} articles retrieved. {duplicates} duplicate(s) removed. {cleaned_df_total} remaining.")
     return df, duplicates
 
-# Function to scrap news from Ghanaweb
-@st.cache_data
+def extract_article_content(soup):
+    """
+    Robust cascading content extractor. Handles modern HTML across Ghanaian portals.
+    """
+    if not soup:
+        return ""
+
+    # Clean out scripts, styles, forms, ads, and widgets
+    for tag in soup(["script", "style", "nav", "footer", "aside", "noscript", "svg", "form"]):
+        tag.decompose()
+
+    for ad in soup.find_all(class_=re.compile(r'(advert|inline-ad|share|comment|social|widget|tags|author-box)', re.I)):
+        ad.decompose()
+
+    # Prioritized content selectors
+    content_selectors = [
+        ('p', {'id': 'article-123'}),
+        ('div', {'id': 'article-123'}),
+        ('div', {'id': 'article-text'}),
+        ('div', {'class': 'entry-content'}),
+        ('div', {'class': 'article-content'}),
+        ('div', {'class': 'td-post-content'}),
+        ('div', {'class': 'post__content'}),
+        ('div', {'class': 'article-text'}),
+        ('div', {'class': 'story-content'}),
+        ('div', {'class': 'article-details'}),
+        ('div', {'id': 'medsection2'}),
+        ('article', {})
+    ]
+
+    for tag_name, attrs in content_selectors:
+        container = soup.find(tag_name, attrs)
+        if container:
+            paras = container.find_all('p')
+            body_parts = [p.get_text(strip=True) for p in paras if len(p.get_text(strip=True)) > 20]
+            body_text = " ".join(body_parts)
+            if len(body_text) > 80:
+                return body_text
+
+    # Heuristic fallback: join all meaningful paragraphs in the document
+    all_paras = soup.find_all('p')
+    fallback_text = " ".join([p.get_text(strip=True) for p in all_paras if len(p.get_text(strip=True)) > 25])
+    return fallback_text if len(fallback_text) > 80 else ""
+
+def extract_article_date(soup, fallback_date):
+    """
+    Extracts published date from meta tags or time elements with fallback.
+    """
+    if not soup:
+        return fallback_date
+
+    # 1. Meta tag
+    meta = soup.find('meta', property=re.compile(r'(published_time|pubdate)', re.I)) or soup.find('meta', attrs={'name': re.compile(r'date', re.I)})
+    if meta and meta.get('content'):
+        val = meta['content'].strip()
+        try:
+            return datetime.fromisoformat(val.replace('Z', '+00:00')).date()
+        except:
+            pass
+
+    # 2. Time tag
+    time_tag = soup.find('time')
+    if time_tag:
+        dt_val = time_tag.get('datetime') or time_tag.get('content')
+        if dt_val:
+            try:
+                return datetime.fromisoformat(dt_val.replace('Z', '+00:00')).date()
+            except:
+                pass
+        text_val = time_tag.get_text(strip=True)
+        for fmt in ('%d %B %Y', '%B %d, %Y', '%Y-%m-%d', '%d/%m/%Y'):
+            try:
+                return datetime.strptime(text_val[:20].strip(), fmt).date()
+            except:
+                pass
+
+    return fallback_date
+
+# =========================================================================
+# 1. Ghanaweb Scraper
+# =========================================================================
 def ghanaweb_scraper(category, end_date_str, start_date_str=None):
     data = []
     base_url = 'https://www.ghanaweb.com'
+    end_date = datetime.strptime(end_date_str, '%Y%m%d').date()
 
-    end_date = datetime.strptime(end_date_str, '%Y%m%d')
-    
     if start_date_str:
-        start_date = datetime.strptime(start_date_str, '%Y%m%d')
+        start_date = datetime.strptime(start_date_str, '%Y%m%d').date()
     else:
-        start_date = datetime.today()
-    date_posted = start_date.strftime('%Y%m%d')
+        start_date = datetime.today().date()
 
-    while start_date >= end_date:
+    cur_date = start_date
+
+    while cur_date >= end_date:
+        date_posted = cur_date.strftime('%Y%m%d')
         headers = get_user_agent()
+        archive_url = f'https://www.ghanaweb.com/GhanaHomePage/{category}/browse.archive.php?date={date_posted}'
+
+        print(f"[Ghanaweb] Scraping {category} on {date_posted} ({archive_url})")
+
         try:
-            url = f'https://www.ghanaweb.com/GhanaHomePage/{category}/browse.archive.php?date={date_posted}'
-            response = requests.get(url, headers=headers)
-        except:
+            res = requests.get(archive_url, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"[Ghanaweb] Connection error on {archive_url}: {e}")
+            cur_date -= timedelta(days=1)
             continue
 
-        if response.status_code == 200:
-            print(f"Fetching articles posted on {date_posted} for category {category}")
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            # Look in div.upper or any archive link container
+            archive_container = soup.find('div', class_='upper') or soup.find('div', class_='article-list') or soup
+            links = archive_container.find_all('a', href=re.compile(r'artikel\.php|\/NewsArchive\/|\/business\/|\/entertainment\/'))
 
-            soup = BeautifulSoup(response.text, 'html.parser')
-            article_div = soup.find('div', {'class': 'upper'})
+            seen_urls = set()
+            for a in links:
+                title = a.get('title') or a.get_text(strip=True)
+                rel_url = a.get('href')
 
-            if article_div:
-                articles = article_div.find_all('a')
-                for article in articles:
-                    title = article.get('title')
-                    relative_url = article.get('href')
+                if not rel_url or not title or len(title) < 10:
+                    continue
 
-                    if not relative_url or not title:
-                        continue  
-                    absolute_url = urljoin(base_url, relative_url)
+                abs_url = urljoin(base_url, rel_url)
+                if abs_url in seen_urls:
+                    continue
+                seen_urls.add(abs_url)
 
-                    print(f"Fetching article from: {absolute_url}")
-                    try:
-                        response2 = requests.get(absolute_url)
-                    except:
-                        continue
+                try:
+                    art_res = requests.get(abs_url, headers=get_user_agent(), timeout=8)
+                    if art_res.status_code == 200:
+                        art_soup = BeautifulSoup(art_res.text, 'html.parser')
+                        content = extract_article_content(art_soup)
+                        pub_date = extract_article_date(art_soup, cur_date)
 
-                    if response2.status_code == 200:
-                        soup2 = BeautifulSoup(response2.text, 'html.parser')
-                        content = soup2.find('p', {'id': 'article-123'})  
                         if content:
                             data.append({
                                 "Source": "Ghanaweb",
                                 "Category": category,
-                                "Date Posted": start_date.date(),
+                                "Date Posted": pub_date,
                                 "Title": title,
-                                "URL": absolute_url,
-                                "Content": content.text
+                                "URL": abs_url,
+                                "Content": content
                             })
-                        else:
-                            print(f"Content not found in {absolute_url}")
-                    else:
-                        print(f"Failed to retrieve the article page. Status code: {response2.status_code}")
-            else:
-                print(f"No articles found for {category} on {date_posted}.")
+                except Exception as err:
+                    print(f"[Ghanaweb] Error fetching {abs_url}: {err}")
 
-            start_date = start_date - timedelta(days=1)
-            date_posted = start_date.strftime('%Y%m%d')
+        cur_date -= timedelta(days=1)
 
-        else:
-            print(f"Failed to retrieve the main page. Status code: {response.status_code}")
-            break
+    return pd.DataFrame(data) if data else pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
 
-    if data:
-        return pd.DataFrame(data)
-    else:
-        print(f"No data was retrieved for {category}.")
-        return pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-
-#@st.cache_data
 def ghanaweb_multi_scraper(source_data):
     scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
     start_date = source_data['start_date'].strftime('%Y%m%d')
     end_date = source_data['end_date'].strftime('%Y%m%d')
 
-    for category in source_data['categories']:
-        with st.spinner(f'Fetching articles from Ghanaweb. Category = {category.upper()}'):
-            df = ghanaweb_scraper(category, end_date, start_date)
-            if df is not None and not df.empty:
-                scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
+    for cat in source_data.get('categories', ['NewsArchive']):
+        df = ghanaweb_scraper(cat, end_date, start_date)
+        if df is not None and not df.empty:
+            scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
+
     return scraped_df
 
-
-
-
-# Function to scrap news from My Joyonline
-@st.cache_data
-def joynews_scraper(category, sub_category, end_date):
-    data = []
-    end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    page_num = 1
-    max_pages = 100  
-    stop_scraping = False  
-    while page_num <= max_pages and not stop_scraping:
-        headers = get_user_agent()
-        try:
-            url = f'https://www.myjoyonline.com/{category}/{sub_category}/page/{page_num}/'
-            response = requests.get(url, headers=headers)
-        except:
-            print(f"Failed to get to {url}")
-            continue
-
-        if response.status_code == 200:
-            print(f"Fetching page {page_num}: {category} - {sub_category} ...")
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            articles = soup.find_all('div', {'class': 'home-section-story-list text-center'})
-            if not articles:
-                print("No more articles found. Stopping.")
-                break  
-
-            for article in articles:
-                # Extract the relative URL from the href attribute
-                article_url = article.find('a').get('href')
-                title = article.find('h4').text
-                if not article_url:
-                    continue  
-
-                print(f"Fetching article from: {article_url}")
-                try:
-                    response2 = requests.get(article_url)
-                except: 
-                    break
-
-                if response2.status_code == 200:
-                    soup2 = BeautifulSoup(response2.text, 'html.parser')
-
-                    date_posted = soup2.find('i', class_='far fa-clock')
-                    if date_posted:
-                        date_posted = date_posted.parent.get_text(strip=True)
-                        date_posted = datetime.strptime(date_posted, "%d %B %Y %I:%M%p").date()
-                        print(f"Article posted on: {date_posted}")
-
-                        if date_posted < end_date:
-                            print("Article date is older than end date. Stopping.")
-                            stop_scraping = True
-                            break  
-
-                    content = soup2.find('div', {'id': 'article-text'})
-                    if content:
-                        paragraphs = content.find_all('p')
-                        article_text = " ".join([p.text for p in paragraphs])
-                        if article_text:
-                            data.append({
-                                "Source": "MyJoyOnline",
-                                "Category": category,
-                                "Date Posted": date_posted,
-                                "Title": title,
-                                "URL": article_url,
-                                "Content": article_text
-                            })
-                        else:
-                            print(f"Content not found in {article_url}")
-                    else:
-                        print(f"Failed to find content in {article_url}")
-                else:
-                    print(f"Failed to retrieve the article page. Status code: {response2.status_code}")
-
-            page_num += 1  
-        else:
-            print(f"Failed to retrieve the main page. Status code: {response.status_code}")
-            break 
-
-    if data:
-        return pd.DataFrame(data)
-    else:
-        print(f"No data was retrieved for {category}.")
-        return pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-
-
-#@st.cache_data
-def joynews_multi_scraper(source_data):
-    scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-    categories = {
-        "news": ["national", "politics", "crime", "africa" "regional", "technology", "oddly-enough", "diaspora", "international", "health", "education", "obituary"],
-        "business": ["economy", "energy", "finance", "mining", "agribusiness", "real-estate", "telecom", "aviation", "banking", "technology-business"],
-        "entertainment": ["movies", "music", "radio-tv", "stage", "art-design", "books"],
-        "sports": ["football", "boxing", "athletics", "tennis", "golf", "other-sports"],
-        "opinion": [""],
-    }
-
-    start_date = source_data['start_date']
-    end_date = source_data['end_date'].strftime('%Y-%m-%d')
-
-    for category in categories:
-        if category in source_data['categories']:
-            with st.spinner(f'Fetching articles from MyJoyOnline. Category = {category.upper()}'):
-                for sub_category in categories[category]:
-                    df = joynews_scraper(category, sub_category, end_date)
-                    if df is not None and not df.empty:
-                        scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
-
-    scraped_df = scraped_df[scraped_df['Date Posted']<= start_date]
-    return scraped_df
-
-
-
-@st.cache_data
+# =========================================================================
+# 2. Modern Ghana Scraper
+# =========================================================================
 def modernghana_scraper(end_date_str, start_date_str=None):
     data = []
     base_url = 'https://www.modernghana.com'
-    end_date = datetime.strptime(end_date_str, '%Y%m%d')
-    
-    # If no start_date is provided, default to today's date
+    end_date = datetime.strptime(end_date_str, '%Y%m%d').date()
+
     if start_date_str:
-        start_date = datetime.strptime(start_date_str, '%Y%m%d')
+        start_date = datetime.strptime(start_date_str, '%Y%m%d').date()
     else:
-        start_date = datetime.today()
-        
-    # Date to start scraping
-    date_posted = start_date.strftime('%Y%m%d')
+        start_date = datetime.today().date()
 
-    while start_date >= end_date:
+    cur_date = start_date
+
+    while cur_date >= end_date:
+        date_posted = cur_date.strftime('%Y%m%d')
         headers = get_user_agent()
+        archive_url = f'https://www.modernghana.com/archive/{date_posted}/'
+
+        print(f"[Modern Ghana] Scraping archive on {date_posted} ({archive_url})")
+
         try:
-            url = f'https://www.modernghana.com/archive/{date_posted}/'
-            response = requests.get(url, headers=headers)
-        except:
+            res = requests.get(archive_url, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"[Modern Ghana] Connection error on {archive_url}: {e}")
+            cur_date -= timedelta(days=1)
             continue
-            
-        if response.status_code == 200:
-            print(f"Fetching articles posted on {date_posted}")
 
-            # Parse the page content using BeautifulSoup
-            soup = BeautifulSoup(response.text, 'html.parser')
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            # Look in archive container or news list
+            container = soup.find('div', class_=re.compile(r'news-archive|archive', re.I)) or soup.find('div', class_='col-left') or soup
+            links = container.find_all('a', href=re.compile(r'/news/|/sports/|/entertainment/'))
 
-            # Find the div with the specific class that contains the article links
-            article_div = soup.find('div', {'class': 'row news-archive2'})
+            seen_urls = set()
+            for a in links:
+                title = a.get_text(strip=True)
+                rel_url = a.get('href')
 
-            if article_div:
-                # Extract all links within that div
-                a_tags = article_div.find_all('a')
+                if not rel_url or not title or len(title) < 10:
+                    continue
 
-                # Print each article's content
-                for a in a_tags:
-                    # Extract the title and relative URL from the href attribute
-                    title = a.text.strip()
-                    relative_url = a.get('href')
+                abs_url = urljoin(base_url, rel_url)
+                if abs_url in seen_urls:
+                    continue
+                seen_urls.add(abs_url)
 
-                    if not relative_url or not title:
-                        continue  # Skip if href or title is not present
+                try:
+                    art_res = requests.get(abs_url, headers=get_user_agent(), timeout=8)
+                    if art_res.status_code == 200:
+                        art_soup = BeautifulSoup(art_res.text, 'html.parser')
+                        content = extract_article_content(art_soup)
+                        pub_date = extract_article_date(art_soup, cur_date)
 
-                    # Construct the absolute URL
-                    absolute_url = urljoin(base_url, relative_url)
-
-                    print(f"Fetching article from: {absolute_url}")
-                    
-                    try:
-                        response2 = requests.get(absolute_url, headers=headers)
-                    except:
-                        continue
-                    
-                    if response2.status_code == 200:
-                        soup2 = BeautifulSoup(response2.text, 'html.parser')
-
-                        # Find the content paragraph
-                        content = soup2.find('div', {'id': 'article-123'})
                         if content:
-                            paragraphs = content.find_all('p')
-                            article_text = " ".join([p.text for p in paragraphs])
-                            if article_text:
-                                data.append({
-                                    "Source": "Modern Ghana",
-                                    "Category": "",
-                                    "Date Posted": date_posted,
-                                    "Title": title,
-                                    "URL": absolute_url,
-                                    "Content": article_text
-                                })
-                        else:
-                            print(f"Content not found in {absolute_url}")
-                    else:
-                        print(f"Failed to retrieve the article page. Status code: {response2.status_code}")
-            else:
-                print(f"No articles found on {date_posted}.")
+                            data.append({
+                                "Source": "Modern Ghana",
+                                "Category": "general",
+                                "Date Posted": pub_date,
+                                "Title": title,
+                                "URL": abs_url,
+                                "Content": content
+                            })
+                except Exception as err:
+                    print(f"[Modern Ghana] Error fetching {abs_url}: {err}")
 
-            # Go to the previous day
-            start_date = start_date - timedelta(days=1)
-            date_posted = start_date.strftime('%Y%m%d')
+        cur_date -= timedelta(days=1)
 
-        else:
-            st.write(f"Failed to retrieve articles from Moodern Ghana on {date_posted}. Status code: {response.status_code}")
-            # Go to the previous day
-            start_date = start_date - timedelta(days=1)
-            date_posted = start_date.strftime('%Y%m%d')
-            
-            continue
+    return pd.DataFrame(data) if data else pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
 
-    # Return a DataFrame if data was collected
-    if data:
-        return pd.DataFrame(data)
-    else:
-        print(f"No data was retrieved.")
-        return pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-    
-
-
-#@st.cache_data
 def modernghana_multi_scraper(source_data):
-    scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
     start_date = source_data['start_date'].strftime('%Y%m%d')
     end_date = source_data['end_date'].strftime('%Y%m%d')
+    return modernghana_scraper(end_date, start_date)
 
-    with st.spinner('Fetching articles from Modern Ghana.'):
-        scraped_df = modernghana_scraper(end_date, start_date)
-
-    return scraped_df
-
-
-
-
-
-@st.cache_data
-def yenghana_scraper(category, end_date):
-    
-    data = []
-    end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    page_num = 1
-    max_pages = 100  
-    stop_scraping = False 
-
-    while page_num <= max_pages and not stop_scraping:
-        headers = get_user_agent()
-            
-        try:
-            url = url = f"https://yen.com.gh/ajax/posts/?page={page_num}&category_id={category}"
-            response = requests.get(url, headers=headers)
-        except requests.RequestException as e:
-            print(f"Failed to get {url}: {e}")
-            page_num += 1
-            continue
-
-        if response.status_code == 200:
-            print(f"Fetching page {page_num}: {category}...")
-            
-            json_data = response.json()
-            html_content = json_data['response']
-
-            soup = BeautifulSoup(html_content, 'html.parser')
-
-            # Find all article elements
-            articles = soup.find_all('article', class_='c-article-card-horizontal')
-
-            # Extract titles and URLs
-            for article in articles:
-                title_tag = article.find('img', class_='thumbnail-picture__img')
-                if title_tag:
-                    title = title_tag['alt'].strip()
-
-                    # Find the article's URL
-                    url_tag = article.find('a')
-                    if url_tag and 'href' in url_tag.attrs:
-                        article_url = url_tag['href']
-
-                print(f"Fetching article from: {article_url}")
-
-                response2 = requests.get(article_url)
-
-                if response2.status_code == 200:
-                    soup2 = BeautifulSoup(response2.text, 'html.parser')
-
-                    # Find the posted date and compare
-                    date_posted = soup2.find('div', {'class': 'c-article-info post__info'})
-                    if date_posted:
-                        date_posted = date_posted.find('time').get('datetime')
-                        date_posted = datetime.strptime(date_posted, '%Y-%m-%dT%H:%M:%S%z').date()
-                        print(f"Article posted on: {date_posted}")
-
-                        # Check if the date exceeds the specified end_date
-                        if date_posted < end_date:
-                            print("Article date is older than end date. Stopping.")
-                            stop_scraping = True
-                            break  # Break out of the inner loop and stop processing further
-
-                    # Find the content paragraph
-                    content = soup2.find('div', {'class': 'post__content'})
-                    if content:
-                        paragraphs = content.find_all('p')
-                        article_text = " ".join([p.text for p in paragraphs])
-                        if article_text:
-                            data.append({
-                                "Source": "Yen Ghana",
-                                "Category": category,
-                                "Date Posted": date_posted,
-                                "Title": title,
-                                "URL": article_url,
-                                "Content": article_text
-                            })
-                            
-                        else:
-                            print(f"Content not found in {article_url}")
-                    else:
-                        print(f"Failed to find content in {article_url}")
-                else:
-                    print(f"Failed to retrieve the article page. Status code: {response2.status_code}")
-
-            page_num += 1  
-
-        else:
-            print(f"Failed to retrieve the page. Status code: {response.status_code}")
-            page_num += 1  
-            continue  
-        
-    if data:
-        return pd.DataFrame(data)
-    else:
-        print(f"No data was retrieved for {category}.")
-        return pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-    
-
-
-def yenghana_multi_scraper(source_data):
-    scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-
-    categories_id = {
-        'Politics': [53],
-        'Ghana': [21079],
-        'Business': [21084, 21087, 21088, 21089, 21090],
-        'Entertainment': [21097, 21098, 21099, 21116, 21096],
-        'Sports': [21103, 21102],
-        'World': [21081, 21083, 21077, 21082],
-    }
-
-    start_date = source_data['start_date']
-    end_date = source_data['end_date'].strftime('%Y-%m-%d')
-
-    for source_category in source_data['categories']:
-        if source_category in categories_id:
-            category_ids = categories_id[source_category]
-            with st.spinner(f'Fetching articles from Yen Ghana. Category = {source_category.upper()}'):
-                for sub_category in category_ids:
-                    df = yenghana_scraper(sub_category, end_date)
-                    if df is not None and not df.empty:
-                        df['Date Posted'] = pd.to_datetime(df['Date Posted']).dt.date
-                        scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
-
-    # Filter the articles based on the start date
-    scraped_df = scraped_df[scraped_df['Date Posted'] <= start_date]
-    return scraped_df
-
-
-
-@st.cache_data
+# =========================================================================
+# 3. 3News Scraper
+# =========================================================================
 def news3_scraper(category, sub_category, end_date_str):
     data = []
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
     page_num = 1
-    max_pages = 100
+    max_pages = 5
     stop_scraping = False
 
     while page_num <= max_pages and not stop_scraping:
         headers = get_user_agent()
+        url = f'https://3news.com/{category}{sub_category}/page/{page_num}/'
+        print(f"[3News] Scraping {url}")
+
         try:
-            url = f'https://3news.com/{category}{sub_category}/page/{page_num}/'
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            print(f"Failed to get {url}: {e}")
-            break  # Break if there's a request error
+            res = requests.get(url, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"[3News] Error getting {url}: {e}")
+            break
 
-        if response.status_code == 200:
-            print(f"Fetching page {page_num}: {category}{sub_category}...")
-            soup = BeautifulSoup(response.text, 'html.parser')
-            article_div = soup.find('div', {'id': 'tdi_51'})
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            # Robust: search for any entry title or article container
+            modules = soup.find_all(['h2', 'h3'], class_=re.compile(r'entry-title|td-module-title', re.I)) or soup.find_all('article')
 
-            if article_div:
-                h3_tags = article_div.find_all('h3', {'class': 'entry-title td-module-title'})
+            if not modules:
+                print(f"[3News] No modules found on page {page_num}.")
+                break
 
-                for h3 in h3_tags:
-                    tag = h3.find('a')
-                    title = tag.text.strip()
-                    article_url = tag.get('href')
+            for mod in modules:
+                a_tag = mod.find('a') if mod.name != 'a' else mod
+                if not a_tag:
+                    continue
 
-                    if not article_url or not title:
-                        continue
+                title = a_tag.get_text(strip=True)
+                art_url = a_tag.get('href')
 
-                    print(f"Fetching article from: {article_url}")
-                    try:
-                        response2 = requests.get(article_url, headers=headers)
-                        response2.raise_for_status()
-                    except requests.RequestException as e:
-                        print(f"Failed to get article {article_url}: {e}")
-                        continue
+                if not art_url or not title or len(title) < 10:
+                    continue
 
-                    if response2.status_code == 200:
-                        soup2 = BeautifulSoup(response2.text, 'html.parser')
-                        p_head = soup2.find('header', class_='td-post-title')
-                        date_tag = p_head.find('time', class_='entry-date updated td-module-date')
-                        
-                        if date_tag:
-                            datetime_str = date_tag['datetime']
-                            date_posted = datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S%z').date()
-                            print(date_posted)
+                try:
+                    art_res = requests.get(art_url, headers=get_user_agent(), timeout=8)
+                    if art_res.status_code == 200:
+                        art_soup = BeautifulSoup(art_res.text, 'html.parser')
+                        pub_date = extract_article_date(art_soup, datetime.today().date())
 
+                        if pub_date < end_date:
+                            print(f"[3News] Article date {pub_date} is older than end date {end_date}. Stopping.")
+                            stop_scraping = True
+                            break
 
-                            # Check if the date is older than the specified end_date
-                            if date_posted < end_date:
-                                print(f"Article date {date_posted} is older than end date {end_date}. Stopping.")
-                                stop_scraping = True
-                                break
-                            
-                            content = soup2.find('div', class_='td-post-content tagdiv-type')
-                            paragraphs = content.find_all('p')
-                            article_text = " ".join([p.text for p in paragraphs])
-                            if article_text:
-                                data.append({
-                                    "Source": "3News",
-                                    "Category": category,
-                                    "Date Posted": date_posted,
-                                    "Title": title,
-                                    "URL": article_url,
-                                    "Content": article_text
-                                })
-                            else:
-                                print(f"Content not found in {article_url}")
-                    else:
-                        print(f"Failed to retrieve the article page. Status code: {response2.status_code}")
-                        continue
-            else:
-                print(f"No articles found for {category} on page {page_num}.")
-                break  
+                        content = extract_article_content(art_soup)
+                        if content:
+                            data.append({
+                                "Source": "3News",
+                                "Category": category,
+                                "Date Posted": pub_date,
+                                "Title": title,
+                                "URL": art_url,
+                                "Content": content
+                            })
+                except Exception as err:
+                    print(f"[3News] Error fetching {art_url}: {err}")
 
-        else:
-            print(f"Failed to retrieve the page {page_num} for {category}{sub_category}. Status code: {response.status_code}")
             page_num += 1
-            continue  
+        else:
+            break
 
-        page_num += 1
-
-    if data:
-        return pd.DataFrame(data)
-    else:
-        print(f"No data was retrieved for {category}.")
-        return pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-    
-
+    return pd.DataFrame(data) if data else pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
 
 def new3_multi_scraper(source_data):
     scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
-
-    categories = {
-        'news': ['', '/politics', '/education', '/world'],
-        'elections': [''],
-        'business': [''],
-        'showbiz': ['', '/celebrities', '/movies', '/music'],
-        'sports': [''],
-        'health': [''],
-        'opinion': ['', '/cartoon'],
-    }
-
     start_date = source_data['start_date']
     end_date = source_data['end_date'].strftime('%Y-%m-%d')
-    
-    for source_category in source_data['categories']:
-        if source_category in categories:
-            category = categories[source_category]
-            with st.spinner(f'Fetching articles from 3News. Category = {source_category.upper()}'):
-                for sub_category in category:
-                    df = news3_scraper(source_category, sub_category, end_date)
-                    if df is not None and not df.empty:
-                        df['Date Posted'] = pd.to_datetime(df['Date Posted']).dt.date
-                        scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
 
-    # Filter the articles based on the start date
-    scraped_df = scraped_df[scraped_df['Date Posted'] <= start_date]
+    categories = {
+        'news': [''],
+        'business': [''],
+        'showbiz': [''],
+        'sports': [''],
+        'health': [''],
+        'opinion': ['']
+    }
+
+    for cat in source_data.get('categories', ['news']):
+        if cat in categories:
+            for sub in categories[cat]:
+                df = news3_scraper(cat, sub, end_date)
+                if df is not None and not df.empty:
+                    df['Date Posted'] = pd.to_datetime(df['Date Posted']).dt.date
+                    scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
+
+    if not scraped_df.empty:
+        scraped_df = scraped_df[scraped_df['Date Posted'] <= start_date]
+
     return scraped_df
 
+# Alias for compatibility
+new3_scraper = news3_scraper
+
+# =========================================================================
+# 4. MyJoyOnline Scraper
+# =========================================================================
+def joynews_scraper(category, sub_category, end_date_str):
+    data = []
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    page_num = 1
+    max_pages = 5
+    stop_scraping = False
+
+    while page_num <= max_pages and not stop_scraping:
+        headers = get_user_agent()
+        sub_path = f"/{sub_category}" if sub_category else ""
+        url = f'https://www.myjoyonline.com/{category}{sub_path}/page/{page_num}/'
+        print(f"[MyJoyOnline] Scraping {url}")
+
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"[MyJoyOnline] Error getting {url}: {e}")
+            break
+
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            # Look for story list items or articles
+            articles = soup.find_all('div', class_=re.compile(r'story-list|home-section|post', re.I)) or soup.find_all('article')
+
+            if not articles:
+                break
+
+            for art in articles:
+                a_tag = art.find('a')
+                if not a_tag:
+                    continue
+
+                h_tag = art.find(['h2', 'h3', 'h4'])
+                title = h_tag.get_text(strip=True) if h_tag else a_tag.get_text(strip=True)
+                art_url = a_tag.get('href')
+
+                if not art_url or not title or len(title) < 10:
+                    continue
+
+                try:
+                    art_res = requests.get(art_url, headers=get_user_agent(), timeout=8)
+                    if art_res.status_code == 200:
+                        art_soup = BeautifulSoup(art_res.text, 'html.parser')
+                        pub_date = extract_article_date(art_soup, datetime.today().date())
+
+                        if pub_date < end_date:
+                            stop_scraping = True
+                            break
+
+                        content = extract_article_content(art_soup)
+                        if content:
+                            data.append({
+                                "Source": "MyJoyOnline",
+                                "Category": category,
+                                "Date Posted": pub_date,
+                                "Title": title,
+                                "URL": art_url,
+                                "Content": content
+                            })
+                except Exception as err:
+                    print(f"[MyJoyOnline] Error fetching {art_url}: {err}")
+
+            page_num += 1
+        else:
+            break
+
+    return pd.DataFrame(data) if data else pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
+
+def joynews_multi_scraper(source_data):
+    scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
+    start_date = source_data['start_date']
+    end_date = source_data['end_date'].strftime('%Y-%m-%d')
+
+    for cat in source_data.get('categories', ['news']):
+        df = joynews_scraper(cat, "", end_date)
+        if df is not None and not df.empty:
+            df['Date Posted'] = pd.to_datetime(df['Date Posted']).dt.date
+            scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
+
+    if not scraped_df.empty:
+        scraped_df = scraped_df[scraped_df['Date Posted'] <= start_date]
+
+    return scraped_df
+
+# =========================================================================
+# 5. Yen Ghana Scraper
+# =========================================================================
+def yenghana_scraper(category, end_date_str):
+    data = []
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    headers = get_user_agent()
+
+    # Try standard category page first: https://yen.com.gh/{category}/
+    cat_url = f"https://yen.com.gh/{category.lower()}/"
+    print(f"[Yen Ghana] Scraping category URL: {cat_url}")
+
+    try:
+        res = requests.get(cat_url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            articles = soup.find_all('article') or soup.find_all('div', class_=re.compile(r'article-card|post', re.I))
+
+            for art in articles:
+                a_tag = art.find('a')
+                if not a_tag:
+                    continue
+
+                title = a_tag.get('title') or (art.find(['h2', 'h3']) and art.find(['h2', 'h3']).get_text(strip=True)) or a_tag.get_text(strip=True)
+                art_url = a_tag.get('href')
+
+                if not art_url or not title or len(title) < 10:
+                    continue
+
+                if not art_url.startswith('http'):
+                    art_url = urljoin('https://yen.com.gh', art_url)
+
+                try:
+                    art_res = requests.get(art_url, headers=get_user_agent(), timeout=8)
+                    if art_res.status_code == 200:
+                        art_soup = BeautifulSoup(art_res.text, 'html.parser')
+                        pub_date = extract_article_date(art_soup, datetime.today().date())
+
+                        if pub_date < end_date:
+                            break
+
+                        content = extract_article_content(art_soup)
+                        if content:
+                            data.append({
+                                "Source": "Yen Ghana",
+                                "Category": category,
+                                "Date Posted": pub_date,
+                                "Title": title,
+                                "URL": art_url,
+                                "Content": content
+                            })
+                except Exception as err:
+                    print(f"[Yen Ghana] Error fetching {art_url}: {err}")
+    except Exception as e:
+        print(f"[Yen Ghana] Error requesting {cat_url}: {e}")
+
+    return pd.DataFrame(data) if data else pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
+
+def yenghana_multi_scraper(source_data):
+    scraped_df = pd.DataFrame(columns=["Source", "Category", "Date Posted", "Title", "URL", "Content"])
+    start_date = source_data['start_date']
+    end_date = source_data['end_date'].strftime('%Y-%m-%d')
+
+    for cat in source_data.get('categories', ['Ghana']):
+        df = yenghana_scraper(cat, end_date)
+        if df is not None and not df.empty:
+            df['Date Posted'] = pd.to_datetime(df['Date Posted']).dt.date
+            scraped_df = pd.concat([scraped_df, df], axis=0, ignore_index=True)
+
+    if not scraped_df.empty:
+        scraped_df = scraped_df[scraped_df['Date Posted'] <= start_date]
+
+    return scraped_df
