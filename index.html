@@ -651,23 +651,184 @@
     <!-- ========================================== -->
     <!-- TAB 3: METHODOLOGY                         -->
     <!-- ========================================== -->
-    <div id="tab-about" class="tab-content hidden max-w-2xl mx-auto space-y-5">
-      <div class="space-y-4 text-xs text-slate-600 leading-relaxed">
-        <h2 class="text-2xl font-extrabold text-slate-900">Methodology</h2>
-        <p>
-          This application analyzes text similarity across five major Ghanaian news portals: <strong>Ghanaweb, 3News,
-            MyJoyOnline, Modern Ghana, and Yen Ghana</strong>.
-        </p>
-        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-slate-800">Detection Steps</h4>
-          <ol class="list-decimal pl-4 space-y-1">
-            <li>Text cleaning: HTML removal, punctuation stripping, and lowercasing.</li>
-            <li>Stopword removal and morphological Porter Stemming.</li>
-            <li>TF-IDF Vectorization with L2 normalization matching scikit-learn.</li>
-            <li>Cosine similarity matrix dot products.</li>
-          </ol>
+    <div id="tab-about" class="tab-content hidden max-w-4xl mx-auto space-y-6">
+      
+      <!-- Methodology Header & Intro -->
+      <div class="border-b border-slate-100 pb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-2xl font-extrabold text-slate-900">Interactive Methodology & NLP Lab</h2>
+            <p class="text-xs text-slate-500 mt-1">
+              Explore how this application processes and detects text similarity across Ghanaian news portals through an interactive 5-stage NLP pipeline.
+            </p>
+          </div>
+          <!-- Preset Buttons -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" data-preset="politics"
+              class="lab-preset-btn px-2.5 py-1 text-[11px] rounded-lg border border-[#2e7d32] bg-emerald-50 text-[#2e7d32] font-bold transition-all shadow-2xs">
+              Politics Paraphrase
+            </button>
+            <button type="button" data-preset="sports"
+              class="lab-preset-btn px-2.5 py-1 text-[11px] rounded-lg border border-slate-200 bg-white text-slate-600 font-medium hover:bg-slate-50 transition-all">
+              Direct Wire Copy
+            </button>
+            <button type="button" data-preset="unrelated"
+              class="lab-preset-btn px-2.5 py-1 text-[11px] rounded-lg border border-slate-200 bg-white text-slate-600 font-medium hover:bg-slate-50 transition-all">
+              Independent Stories
+            </button>
+          </div>
         </div>
       </div>
+
+      <!-- Live Pipeline Gauge & Threshold Dashboard -->
+      <div class="bg-gradient-to-r from-emerald-900 to-[#1e5422] rounded-3xl p-5 text-white shadow-md">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+          <!-- Score Gauge -->
+          <div class="sm:border-r sm:border-white/10 sm:pr-4">
+            <span class="text-[10px] uppercase font-bold tracking-wider text-emerald-200/80 block">Similarity Score</span>
+            <div class="flex items-baseline gap-2 mt-0.5">
+              <span id="lab-score-display" class="text-3xl sm:text-4xl font-extrabold tracking-tight">0.0%</span>
+              <span id="lab-angle-display" class="text-xs font-mono text-emerald-300">0.0° separation</span>
+            </div>
+            <div class="w-full bg-white/20 rounded-full h-2 mt-2 overflow-hidden">
+              <div id="lab-score-bar" class="h-full bg-emerald-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Dynamic Verdict -->
+          <div class="flex flex-col justify-center sm:border-r sm:border-white/10 sm:pr-4">
+            <span class="text-[10px] uppercase font-bold tracking-wider text-emerald-200/80 block mb-1">Pipeline Classification</span>
+            <div>
+              <span id="lab-verdict-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-block">
+                Evaluating...
+              </span>
+            </div>
+          </div>
+
+          <!-- Interactive Threshold Calibration -->
+          <div class="flex flex-col justify-center">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-[10px] uppercase font-bold tracking-wider text-emerald-200/80">Plagiarism Cutoff</span>
+              <span id="lab-thresh-val" class="font-mono font-bold text-emerald-300">15%</span>
+            </div>
+            <input id="lab-thresh-slider" type="range" min="5" max="80" step="5" value="15"
+              class="w-full accent-emerald-400 cursor-pointer">
+            <span class="text-[10px] text-emerald-200/60 mt-1">Adjust cutoff to simulate sensitivity</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Editable Document Textareas -->
+      <details class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden group">
+        <summary class="px-4 py-3 font-bold text-xs text-slate-700 cursor-pointer flex items-center justify-between select-none hover:bg-slate-100/70 transition-colors">
+          <span>Edit Sample Text Documents (A &amp; B)</span>
+          <span class="text-slate-400 text-xs font-mono group-open:rotate-180 transition-transform">▼</span>
+        </summary>
+        <div class="p-4 pt-2 border-t border-slate-200 space-y-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-bold text-emerald-800 mb-1">Document A Text</label>
+              <textarea id="lab-input-a" rows="4"
+                class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-sky-800 mb-1">Document B Text</label>
+              <textarea id="lab-input-b" rows="4"
+                class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono"></textarea>
+            </div>
+          </div>
+          <div class="flex justify-end">
+            <button id="lab-run-btn" type="button"
+              class="px-5 py-2 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-xs rounded-xl shadow-xs transition-colors">
+              Re-run Interactive Pipeline
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Step Navigation Bar -->
+      <div class="flex items-center justify-between gap-1 overflow-x-auto pb-1 border-b border-slate-100">
+        <button type="button" data-step="1"
+          class="pipeline-step-pill px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 bg-[#2e7d32] text-white shadow-xs">
+          1. Sanitization
+        </button>
+        <button type="button" data-step="2"
+          class="pipeline-step-pill px-3 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
+          2. Stopwords
+        </button>
+        <button type="button" data-step="3"
+          class="pipeline-step-pill px-3 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
+          3. Stemming
+        </button>
+        <button type="button" data-step="4"
+          class="pipeline-step-pill px-3 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
+          4. TF-IDF Matrix
+        </button>
+        <button type="button" data-step="5"
+          class="pipeline-step-pill px-3 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
+          5. Cosine Similarity
+        </button>
+      </div>
+
+      <!-- Dynamic Step Viewports -->
+      <div id="lab-step-1" class="transition-all duration-200"></div>
+      <div id="lab-step-2" class="hidden transition-all duration-200"></div>
+      <div id="lab-step-3" class="hidden transition-all duration-200"></div>
+      <div id="lab-step-4" class="hidden transition-all duration-200"></div>
+      <div id="lab-step-5" class="hidden transition-all duration-200"></div>
+
+      <!-- Stepper Controls (Prev / Next) -->
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+        <button id="lab-prev-step" type="button"
+          class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors">
+          ← Previous Stage
+        </button>
+        <button id="lab-next-step" type="button"
+          class="px-5 py-2 bg-[#2e7d32] hover:bg-[#256628] text-white font-bold text-xs rounded-xl shadow-xs transition-colors">
+          Next Stage →
+        </button>
+      </div>
+
+      <!-- Methodology Scientific Deep Dive Cards -->
+      <div class="pt-6 border-t border-slate-200 space-y-4">
+        <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Methodology Deep Dive</h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <!-- Card 1 -->
+          <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2">
+            <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs">
+              📐
+            </div>
+            <h4 class="font-bold text-slate-900">Why Cosine Similarity?</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Unlike Euclidean distance, which measures the straight-line physical distance between document vectors, Cosine Similarity calculates the angle between them. This makes it invariant to document length, meaning an expanded 800-word feature story and a concise 200-word wire report are compared purely on lexical alignment.
+            </p>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2">
+            <div class="w-7 h-7 rounded-lg bg-sky-100 text-sky-800 font-bold flex items-center justify-center text-xs">
+              ⚖️
+            </div>
+            <h4 class="font-bold text-slate-900">Smooth IDF Formulation</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              Matches scikit-learn's standard formula: <code>idf(t) = ln((1 + n) / (1 + df(t))) + 1</code>. Adding 1 to document counts prevents zero division errors for terms occurring across all documents, penalizing pervasive vocabulary while surfacing distinct investigative phrasing.
+            </p>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2">
+            <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs">
+              🇬🇭
+            </div>
+            <h4 class="font-bold text-slate-900">Ghanaian Media Syndication</h4>
+            <p class="text-slate-600 leading-relaxed text-[11px]">
+              In Ghana's news ecosystem (GhanaWeb, 3News, MyJoyOnline, Modern Ghana, Yen), outlets frequently syndicate GNA press releases with minimal modifications. Setting the threshold to 10%–15% effectively detects paraphrased wire stories, whereas 70%+ flags verbatim republished duplicates.
+            </p>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </main>
@@ -758,6 +919,7 @@
   <script src="./js/scraper.js"></script>
   <script src="./js/charts.js"></script>
   <script src="./js/diff.js"></script>
+  <script src="./js/methodology.js"></script>
   <script src="./js/app.js"></script>
 
 </body>

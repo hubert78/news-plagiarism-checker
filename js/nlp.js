@@ -396,5 +396,6 @@ globalRoot.NLP = {
   computeCosineSimilarity,
   checkSimilarityScores,
   compareTwoTexts,
-  stemmer
+  stemmer,
+  STOP_WORDS
 };
