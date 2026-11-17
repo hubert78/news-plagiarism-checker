@@ -377,9 +377,15 @@ async function scrapeYenGhana(category, startDate, endDate, onProgress) {
 /**
  * Unified Scraper Dispatcher
  */
-async function scrapeSourceClientSide(source, categories, startDate, endDate, onProgress) {
+async function scrapeSourceClientSide(source, categories, date1, date2, onProgress) {
   onProgress(`Starting live scrape for ${source}...`);
   let results = [];
+
+  // Robust date normalization: scrapers count down from newer date to older cutoff date
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  const startDate = d1 >= d2 ? date1 : date2;
+  const endDate = d1 < d2 ? date1 : date2;
 
   try {
     if (source === 'Ghanaweb') {

@@ -71,9 +71,11 @@ class PlagiarismAppHandler(SimpleHTTPRequestHandler):
         def prepare_source_payload(s_data):
             cats = s_data.get('categories', [])
             unique_cats = list(dict.fromkeys(cats)) if isinstance(cats, list) else []
+            d1 = parse_date(s_data.get('start_date'))
+            d2 = parse_date(s_data.get('end_date'))
             return {
-                'start_date': parse_date(s_data.get('start_date')),
-                'end_date': parse_date(s_data.get('end_date')),
+                'start_date': max(d1, d2),
+                'end_date': min(d1, d2),
                 'categories': unique_cats
             }
 

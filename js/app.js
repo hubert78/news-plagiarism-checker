@@ -90,8 +90,8 @@ let state = {
   source1: "3News",
   source2: "MyJoyOnline",
   activeCategories: new Set(["news"]),
-  startDate: formatDate(today),
-  endDate: formatDate(threeDaysAgo),
+  startDate: formatDate(threeDaysAgo),
+  endDate: formatDate(today),
   threshold: 50,
   activeTab: "analysis",
   activeView: "charts",
@@ -153,12 +153,38 @@ function initTabs() {
 function initDateInputs() {
   const startInput = document.getElementById("scan-start-date");
   const endInput = document.getElementById("scan-end-date");
+  const todayStr = formatDate(today);
 
-  if (startInput) startInput.value = state.startDate;
-  if (endInput) endInput.value = state.endDate;
+  if (startInput) {
+    startInput.value = state.startDate;
+    startInput.max = todayStr;
+  }
+  if (endInput) {
+    endInput.value = state.endDate;
+    endInput.max = todayStr;
+  }
 
-  startInput?.addEventListener("change", (e) => state.startDate = e.target.value);
-  endInput?.addEventListener("change", (e) => state.endDate = e.target.value);
+  startInput?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (state.endDate && val > state.endDate) {
+      alert("Invalid Date Range: Start Date cannot be after the End Date.");
+      showToast("Start Date cannot be after End Date.", "error");
+      startInput.value = state.startDate;
+      return;
+    }
+    state.startDate = val;
+  });
+
+  endInput?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (state.startDate && val < state.startDate) {
+      alert("Invalid Date Range: The End Date cannot be in the past of the Start Date. Please select a valid date range.");
+      showToast("End Date cannot be earlier than Start Date.", "error");
+      endInput.value = state.endDate;
+      return;
+    }
+    state.endDate = val;
+  });
 }
 
 // Source Selection Cards
@@ -409,6 +435,8 @@ function initResetButton() {
     state.source1 = "3News";
     state.source2 = "MyJoyOnline";
     state.threshold = 50;
+    state.startDate = formatDate(threeDaysAgo);
+    state.endDate = formatDate(today);
     state.activeCategories = new Set(["news"]);
     state.articles = [];
     state.activeView = "charts";
@@ -512,6 +540,12 @@ async function executeLiveScrapingAndCheck() {
 
   if (!state.source1 || !state.source2) {
     showToast("Please select two news sources to compare.", "warning");
+    return;
+  }
+
+  if (state.startDate && state.endDate && state.startDate > state.endDate) {
+    alert("Invalid Date Range: The End Date cannot be earlier than (in the past of) the Start Date. Please select a valid date range.");
+    showToast("End Date cannot be earlier than Start Date.", "error");
     return;
   }
 
