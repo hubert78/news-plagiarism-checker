@@ -1,6 +1,6 @@
 /**
- * Main Application Controller for News Plagiarism Checker
- * Pure Live Web Scraping Mode (No Archived Dataset)
+ * Jolly & Clean Application Controller
+ * Interactive card selection for news sources with pure live scraping
  */
 
 const SOURCE_CATEGORIES = {
@@ -10,8 +10,6 @@ const SOURCE_CATEGORIES = {
   "Modern Ghana": ["general", "news", "business", "entertainment", "sports"],
   "Yen Ghana": ["Ghana", "Politics", "Business", "Entertanment", "Sports", "World"]
 };
-
-const ALL_SOURCES = Object.keys(SOURCE_CATEGORIES);
 
 function formatDate(d) {
   const y = d.getFullYear();
@@ -28,12 +26,9 @@ let state = {
   articles: [],
   source1: "Ghanaweb",
   source2: "3News",
-  source1Categories: [...SOURCE_CATEGORIES["Ghanaweb"]],
-  source2Categories: [...SOURCE_CATEGORIES["3News"]],
-  source1StartDate: formatDate(today),
-  source1EndDate: formatDate(threeDaysAgo),
-  source2StartDate: formatDate(today),
-  source2EndDate: formatDate(threeDaysAgo),
+  activeCategories: new Set([...SOURCE_CATEGORIES["Ghanaweb"], ...SOURCE_CATEGORIES["3News"]]),
+  startDate: formatDate(today),
+  endDate: formatDate(threeDaysAgo),
   threshold: 70,
   activeTab: "analysis",
   activeView: "table"
@@ -42,23 +37,25 @@ let state = {
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initDateInputs();
-  initSelectors();
+  initSourceCards();
+  initCategoryPills();
   initSliders();
   initResultTabs();
+  initResetButton();
   initFileUpload();
   initQuickCompare();
 });
 
-// Primary Tab Navigation (Comparison, Quick Compare, Dataset, Methodology)
+// Primary Tab Navigation
 function initTabs() {
   const tabs = document.querySelectorAll(".nav-tab");
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       tabs.forEach(t => {
-        t.classList.remove("active", "bg-slate-100", "text-slate-900");
+        t.classList.remove("active", "bg-slate-100", "text-slate-800");
         t.classList.add("text-slate-600");
       });
-      tab.classList.add("active", "bg-slate-100", "text-slate-900");
+      tab.classList.add("active", "bg-slate-100", "text-slate-800");
       tab.classList.remove("text-slate-600");
 
       const tabTarget = tab.dataset.tab;
@@ -72,23 +69,120 @@ function initTabs() {
 }
 
 function initDateInputs() {
-  const s1Start = document.getElementById("s1-start-date");
-  const s1End = document.getElementById("s1-end-date");
-  const s2Start = document.getElementById("s2-start-date");
-  const s2End = document.getElementById("s2-end-date");
+  const startInput = document.getElementById("scan-start-date");
+  const endInput = document.getElementById("scan-end-date");
 
-  if (s1Start) s1Start.value = state.source1StartDate;
-  if (s1End) s1End.value = state.source1EndDate;
-  if (s2Start) s2Start.value = state.source2StartDate;
-  if (s2End) s2End.value = state.source2EndDate;
+  if (startInput) startInput.value = state.startDate;
+  if (endInput) endInput.value = state.endDate;
 
-  s1Start?.addEventListener("change", (e) => state.source1StartDate = e.target.value);
-  s1End?.addEventListener("change", (e) => state.source1EndDate = e.target.value);
-  s2Start?.addEventListener("change", (e) => state.source2StartDate = e.target.value);
-  s2End?.addEventListener("change", (e) => state.source2EndDate = e.target.value);
+  startInput?.addEventListener("change", (e) => state.startDate = e.target.value);
+  endInput?.addEventListener("change", (e) => state.endDate = e.target.value);
 }
 
-// Result Views Navigation (Table, Charts, Duplicates)
+// Source Selection Cards
+function initSourceCards() {
+  const cards = document.querySelectorAll(".source-card");
+
+  function updateCardStyles() {
+    cards.forEach(card => {
+      const src = card.dataset.source;
+      const slot = card.querySelector(".badge-slot");
+      card.classList.remove("selected-s1", "selected-s2");
+
+      if (src === state.source1) {
+        card.classList.add("selected-s1");
+        if (slot) slot.innerHTML = `<span class="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">Source 1</span>`;
+      } else if (src === state.source2) {
+        card.classList.add("selected-s2");
+        if (slot) slot.innerHTML = `<span class="bg-sky-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold">Source 2</span>`;
+      } else {
+        if (slot) slot.innerHTML = `<span class="text-slate-400 font-semibold text-[10px]">Tap to select</span>`;
+      }
+    });
+
+    const indicator = document.getElementById("selected-sources-indicator");
+    if (indicator) {
+      if (state.source1 && state.source2) {
+        indicator.textContent = `${state.source1} vs ${state.source2}`;
+        indicator.className = "text-xs font-bold text-emerald-800 bg-emerald-100/70 px-3 py-1 rounded-full border border-emerald-300";
+      } else {
+        indicator.textContent = "Select 2 sources";
+        indicator.className = "text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full";
+      }
+    }
+  }
+
+  cards.forEach(card => {
+    card.addEventListener("click", () => {
+      const src = card.dataset.source;
+
+      if (src === state.source1) {
+        // Deselect or keep
+        return;
+      } else if (src === state.source2) {
+        // Swap sources
+        const temp = state.source1;
+        state.source1 = state.source2;
+        state.source2 = temp;
+      } else {
+        // Replace source 2
+        state.source2 = src;
+      }
+
+      updateCardStyles();
+      initCategoryPills();
+    });
+  });
+
+  updateCardStyles();
+
+  document.getElementById("run-scan-btn")?.addEventListener("click", () => {
+    executeLiveScrapingAndCheck();
+  });
+}
+
+// Category Pills
+function initCategoryPills() {
+  const container = document.getElementById("active-categories-container");
+  if (!container) return;
+
+  const cats1 = SOURCE_CATEGORIES[state.source1] || [];
+  const cats2 = SOURCE_CATEGORIES[state.source2] || [];
+  const uniqueCats = Array.from(new Set([...cats1, ...cats2]));
+
+  state.activeCategories = new Set(uniqueCats);
+  container.innerHTML = "";
+
+  uniqueCats.forEach(cat => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cat-pill active px-3 py-1 text-xs font-semibold rounded-xl border";
+    btn.textContent = cat;
+
+    btn.addEventListener("click", () => {
+      if (state.activeCategories.has(cat)) {
+        state.activeCategories.delete(cat);
+        btn.classList.remove("active");
+      } else {
+        state.activeCategories.add(cat);
+        btn.classList.add("active");
+      }
+    });
+
+    container.appendChild(btn);
+  });
+}
+
+function initSliders() {
+  const slider = document.getElementById("threshold-slider");
+  const valueDisplay = document.getElementById("threshold-value");
+
+  slider?.addEventListener("input", (e) => {
+    state.threshold = parseInt(e.target.value, 10);
+    if (valueDisplay) valueDisplay.textContent = `${state.threshold}%`;
+  });
+}
+
 function initResultTabs() {
   const resTabs = document.querySelectorAll(".res-tab");
   resTabs.forEach(tab => {
@@ -110,7 +204,29 @@ function initResultTabs() {
   });
 }
 
-// Terminal Log Helper
+function initResetButton() {
+  document.getElementById("reset-btn")?.addEventListener("click", () => {
+    state.source1 = "Ghanaweb";
+    state.source2 = "3News";
+    state.threshold = 70;
+    state.articles = [];
+
+    const slider = document.getElementById("threshold-slider");
+    const valDisp = document.getElementById("threshold-value");
+    if (slider) slider.value = 70;
+    if (valDisp) valDisp.textContent = "70%";
+
+    initDateInputs();
+    initSourceCards();
+    initCategoryPills();
+
+    document.getElementById("analysis-results")?.classList.add("hidden");
+    document.getElementById("live-terminal")?.classList.add("hidden");
+    document.getElementById("no-results-banner")?.classList.add("hidden");
+    showToast("Reset to defaults.", "info");
+  });
+}
+
 function logTerminal(message, type = 'info') {
   const terminal = document.getElementById("live-terminal");
   const logBox = document.getElementById("terminal-logs");
@@ -123,105 +239,14 @@ function logTerminal(message, type = 'info') {
 
   let prefix = '>';
   let color = 'text-slate-300';
-  if (type === 'success') { prefix = '✓'; color = 'text-emerald-400 font-medium'; }
-  if (type === 'warn') { prefix = '!'; color = 'text-amber-400'; }
-  if (type === 'error') { prefix = '✕'; color = 'text-rose-400'; }
+  if (type === 'success') { prefix = '✓'; color = 'text-emerald-400 font-bold'; }
+  if (type === 'warn') { prefix = '!'; color = 'text-amber-400 font-medium'; }
+  if (type === 'error') { prefix = '✕'; color = 'text-rose-400 font-medium'; }
 
   line.className = `flex items-start gap-2 ${color}`;
   line.innerHTML = `<span class="text-slate-500 select-none">${timestamp}</span> <span>${prefix}</span> <span>${message}</span>`;
   logBox.appendChild(line);
   logBox.scrollTop = logBox.scrollHeight;
-}
-
-// Initialize Selectors
-function initSelectors() {
-  const sel1 = document.getElementById("source-1-select");
-  const sel2 = document.getElementById("source-2-select");
-
-  populateSelect(sel1, ALL_SOURCES, state.source1);
-  updateSource2Options();
-
-  sel1?.addEventListener("change", (e) => {
-    state.source1 = e.target.value;
-    updateSource2Options();
-    renderCategoriesUI(1);
-  });
-
-  sel2?.addEventListener("change", (e) => {
-    state.source2 = e.target.value;
-    renderCategoriesUI(2);
-  });
-
-  renderCategoriesUI(1);
-  renderCategoriesUI(2);
-
-  document.getElementById("run-check-btn")?.addEventListener("click", () => {
-    executeLiveScrapingAndCheck();
-  });
-}
-
-function updateSource2Options() {
-  const sel2 = document.getElementById("source-2-select");
-  const options = ALL_SOURCES.filter(s => s !== state.source1);
-  if (!options.includes(state.source2)) {
-    state.source2 = options[0];
-  }
-  populateSelect(sel2, options, state.source2);
-  renderCategoriesUI(2);
-}
-
-function populateSelect(selectEl, options, selectedVal) {
-  if (!selectEl) return;
-  selectEl.innerHTML = "";
-  options.forEach(opt => {
-    const el = document.createElement("option");
-    el.value = opt;
-    el.textContent = opt;
-    if (opt === selectedVal) el.selected = true;
-    selectEl.appendChild(el);
-  });
-}
-
-function renderCategoriesUI(sourceNum) {
-  const sourceName = sourceNum === 1 ? state.source1 : state.source2;
-  const container = document.getElementById(`s${sourceNum}-categories-container`);
-  if (!container) return;
-
-  const cats = SOURCE_CATEGORIES[sourceName] || [];
-  if (sourceNum === 1) state.source1Categories = [...cats];
-  else state.source2Categories = [...cats];
-
-  container.innerHTML = "";
-  cats.forEach(cat => {
-    const badge = document.createElement("button");
-    badge.type = "button";
-    badge.className = "cat-pill active px-2 py-0.5 text-[11px] font-medium rounded border";
-    badge.textContent = cat;
-
-    badge.addEventListener("click", () => {
-      const activeList = sourceNum === 1 ? state.source1Categories : state.source2Categories;
-      const idx = activeList.indexOf(cat);
-      if (idx > -1) {
-        activeList.splice(idx, 1);
-        badge.classList.remove("active");
-      } else {
-        activeList.push(cat);
-        badge.classList.add("active");
-      }
-    });
-
-    container.appendChild(badge);
-  });
-}
-
-function initSliders() {
-  const slider = document.getElementById("threshold-slider");
-  const valueDisplay = document.getElementById("threshold-value");
-
-  slider?.addEventListener("input", (e) => {
-    state.threshold = parseInt(e.target.value, 10);
-    if (valueDisplay) valueDisplay.textContent = `${state.threshold}%`;
-  });
 }
 
 function checkDuplicates(articlesList) {
@@ -243,34 +268,41 @@ function checkDuplicates(articlesList) {
 }
 
 /**
- * Functional Scraping Dispatcher
- * Calls Python Scraper API if available, or browser client-side proxy scraper if on GitHub Pages
+ * Functional Scraping Execution
  */
 async function executeLiveScrapingAndCheck() {
-  const btn = document.getElementById("run-check-btn");
+  const btn = document.getElementById("run-scan-btn");
   const spinner = document.getElementById("btn-spinner");
   const logBox = document.getElementById("terminal-logs");
   const terminal = document.getElementById("live-terminal");
+
+  if (!state.source1 || !state.source2) {
+    showToast("Please select two news sources to compare.", "warning");
+    return;
+  }
 
   if (logBox) logBox.innerHTML = "";
   if (terminal) terminal.classList.remove("hidden");
   if (btn) btn.disabled = true;
   if (spinner) spinner.classList.remove("hidden");
 
-  logTerminal(`Initiating scraper for ${state.source1} and ${state.source2}...`);
+  logTerminal(`Connecting to ${state.source1} and ${state.source2}...`);
+
+  const cats1 = (SOURCE_CATEGORIES[state.source1] || []).filter(c => state.activeCategories.has(c));
+  const cats2 = (SOURCE_CATEGORIES[state.source2] || []).filter(c => state.activeCategories.has(c));
 
   const payload = {
     source_1: state.source1,
     source_2: state.source2,
     source_1_data: {
-      start_date: state.source1StartDate,
-      end_date: state.source1EndDate,
-      categories: state.source1Categories
+      start_date: state.startDate,
+      end_date: state.endDate,
+      categories: cats1
     },
     source_2_data: {
-      start_date: state.source2StartDate,
-      end_date: state.source2EndDate,
-      categories: state.source2Categories
+      start_date: state.startDate,
+      end_date: state.endDate,
+      categories: cats2
     }
   };
 
@@ -284,7 +316,7 @@ async function executeLiveScrapingAndCheck() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(6000)
     });
 
     if (res.ok) {
@@ -297,33 +329,32 @@ async function executeLiveScrapingAndCheck() {
       }
     }
   } catch (err) {
-    // Continue to client-side scraper
+    // Continue to browser scraper
   }
 
-  // 2. Client-side scraper fallback (GitHub Pages)
+  // 2. Client-side browser scraper fallback (GitHub Pages)
   if (!pythonApiSuccess) {
-    logTerminal("Python server endpoint not detected (Static / GitHub Pages mode).", 'info');
     logTerminal("Running browser client-side scraper via CORS proxy...", 'info');
 
     try {
       const arts1 = await NewsScraper.scrapeSourceClientSide(
         state.source1,
-        state.source1Categories,
-        state.source1StartDate,
-        state.source1EndDate,
+        cats1,
+        state.startDate,
+        state.endDate,
         msg => logTerminal(msg)
       );
 
       const arts2 = await NewsScraper.scrapeSourceClientSide(
         state.source2,
-        state.source2Categories,
-        state.source2StartDate,
-        state.source2EndDate,
+        cats2,
+        state.startDate,
+        state.endDate,
         msg => logTerminal(msg)
       );
 
       newArticles = [...arts1, ...arts2];
-      logTerminal(`Scraping finished. Total ${newArticles.length} articles extracted.`, 'success');
+      logTerminal(`Scraping complete. Total ${newArticles.length} articles extracted.`, 'success');
     } catch (err) {
       logTerminal(`Scraper error: ${err.message}`, 'error');
     }
@@ -335,12 +366,12 @@ async function executeLiveScrapingAndCheck() {
   if (spinner) spinner.classList.add("hidden");
 
   if (state.articles.length === 0) {
-    logTerminal("No articles were retrieved from the selected feeds. Check connection or date range.", 'warn');
-    showToast("No articles retrieved. Please check date range or connection.", "warning");
+    logTerminal("No articles were retrieved. Check your internet connection or date range.", 'warn');
+    showToast("No articles retrieved. Check date range or connection.", "warning");
     return;
   }
 
-  showToast(`Successfully scraped ${state.articles.length} articles. Calculating similarities...`, "success");
+  showToast(`Scraped ${state.articles.length} articles. Calculating similarities...`, "success");
   runPlagiarismCheck();
 }
 
@@ -363,27 +394,22 @@ function runPlagiarismCheck() {
   const s1Cleaned = s1DupInfo.cleaned;
   const s2Cleaned = s2DupInfo.cleaned;
 
-  document.getElementById("s1-stats-badge").textContent = `${s1Cleaned.length} articles`;
-  document.getElementById("s2-stats-badge").textContent = `${s2Cleaned.length} articles`;
-
   if (s1Cleaned.length === 0 || s2Cleaned.length === 0) {
     if (noResultsEl) {
       noResultsEl.classList.remove("hidden");
       noResultsEl.querySelector("p").textContent = 
-        `Insufficient articles to compare. Scraped ${s1Cleaned.length} from ${state.source1} and ${s2Cleaned.length} from ${state.source2}.`;
+        `Need articles from both sources to compare. Found ${s1Cleaned.length} from ${state.source1} and ${s2Cleaned.length} from ${state.source2}.`;
     }
     return;
   }
 
   const combinedArticles = [...s1Cleaned, ...s2Cleaned];
 
-  // Process text and TF-IDF
   const processedDocs = combinedArticles.map(a => NLP.cleanText(a.Content || ""));
   const vectorizer = new NLP.TfidfVectorizer();
   const tfidfMatrix = vectorizer.fitTransform(processedDocs);
   const simMatrix = NLP.computeCosineSimilarity(tfidfMatrix);
 
-  // Group scores
   const thresholdVal = state.threshold / 100.0;
   const dataScores = NLP.checkSimilarityScores(thresholdVal, simMatrix, combinedArticles);
 
@@ -392,23 +418,17 @@ function runPlagiarismCheck() {
   const betweenPairs = dataScores.betweenSourcePairs[pairKey1] || dataScores.betweenSourcePairs[pairKey2] || [];
   const numPlagiarized = betweenPairs.length;
 
-  // Update KPI Cards
-  const pairsCountEl = document.getElementById("metric-pairs-count");
-  if (pairsCountEl) pairsCountEl.textContent = numPlagiarized;
+  // Update Summary Banner
+  const titleCountEl = document.getElementById("report-title-count");
+  if (titleCountEl) titleCountEl.textContent = `${numPlagiarized} Plagiarized Article${numPlagiarized === 1 ? '' : 's'} Found`;
+
+  const s1Pill = document.getElementById("s1-summary-pill");
+  const s2Pill = document.getElementById("s2-summary-pill");
+  if (s1Pill) s1Pill.textContent = `${state.source1}: ${s1Cleaned.length} articles`;
+  if (s2Pill) s2Pill.textContent = `${state.source2}: ${s2Cleaned.length} articles`;
 
   const badgeTab = document.getElementById("tab-pairs-badge");
   if (badgeTab) badgeTab.textContent = numPlagiarized;
-
-  const s1Rate = s1Cleaned.length > 0 ? ((numPlagiarized / s1Cleaned.length) * 100).toFixed(1) : 0;
-  const s2Rate = s2Cleaned.length > 0 ? ((numPlagiarized / s2Cleaned.length) * 100).toFixed(1) : 0;
-
-  document.getElementById("metric-s1-title").textContent = `${state.source1} Duplication`;
-  document.getElementById("metric-s1-rate").textContent = `${s1Rate}%`;
-  document.getElementById("metric-s1-desc").textContent = `${numPlagiarized} of ${s1Cleaned.length} articles flagged`;
-
-  document.getElementById("metric-s2-title").textContent = `${state.source2} Duplication`;
-  document.getElementById("metric-s2-rate").textContent = `${s2Rate}%`;
-  document.getElementById("metric-s2-desc").textContent = `${numPlagiarized} of ${s2Cleaned.length} articles flagged`;
 
   // Render Charts & Tables
   renderAnalysisCharts(s1Cleaned, s2Cleaned, s1DupInfo, s2DupInfo, numPlagiarized, dataScores);
@@ -419,7 +439,6 @@ function runPlagiarismCheck() {
   resultsEl.scrollIntoView({ behavior: "smooth" });
 }
 
-// Render Charts
 function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numPlagiarized, dataScores) {
   const s1Plagiarized = Math.min(numPlagiarized, s1Articles.length);
   const s1Unplagiarized = Math.max(0, s1Articles.length - s1Plagiarized);
@@ -435,8 +454,8 @@ function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numP
     "Original": s2Unplagiarized
   }, 'plagiarism');
 
-  ChartManager.renderBarChart("chart-categories-s1", state.source1, dataScores.source1Categories || {}, '#0f172a');
-  ChartManager.renderBarChart("chart-categories-s2", state.source2, dataScores.source2Categories || {}, '#334155');
+  ChartManager.renderBarChart("chart-categories-s1", state.source1, dataScores.source1Categories || {}, '#16a34a');
+  ChartManager.renderBarChart("chart-categories-s2", state.source2, dataScores.source2Categories || {}, '#0284c7');
 
   const withinPairs = dataScores.withinSourcePairs || {};
   const s1Similar = (withinPairs[state.source1] || []).length;
@@ -475,11 +494,10 @@ function renderAnalysisCharts(s1Articles, s2Articles, s1DupInfo, s2DupInfo, numP
     s2DupCard.classList.add("hidden");
   }
 
-  ChartManager.renderHorizontalBarChart("chart-dates-s1", state.source1, dataScores.source1DateCount || {}, '#475569');
-  ChartManager.renderHorizontalBarChart("chart-dates-s2", state.source2, dataScores.source2DateCount || {}, '#64748b');
+  ChartManager.renderHorizontalBarChart("chart-dates-s1", state.source1, dataScores.source1DateCount || {}, '#16a34a');
+  ChartManager.renderHorizontalBarChart("chart-dates-s2", state.source2, dataScores.source2DateCount || {}, '#0284c7');
 }
 
-// Render Plagiarized Table
 function renderPlagiarizedTable(pairs, articles) {
   const tbody = document.getElementById("plagiarism-table-body");
   if (!tbody) return;
@@ -487,7 +505,7 @@ function renderPlagiarizedTable(pairs, articles) {
   tbody.innerHTML = "";
 
   if (pairs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400">No plagiarized articles detected above ${state.threshold}% threshold.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400 font-medium">No plagiarized articles detected above ${state.threshold}% threshold.</td></tr>`;
     return;
   }
 
@@ -499,38 +517,38 @@ function renderPlagiarizedTable(pairs, articles) {
     const pct = (pair.score * 100).toFixed(1);
 
     const tr = document.createElement("tr");
-    tr.className = "hover:bg-slate-50/80 transition-colors border-b border-slate-100";
+    tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
     tr.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap">
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${pair.score >= 0.85 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-100 text-slate-800'}">
+      <td class="px-4 py-3.5 whitespace-nowrap">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-extrabold ${pair.score >= 0.85 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}">
           ${pct}%
         </span>
       </td>
-      <td class="px-4 py-3">
-        <div class="font-medium text-slate-900 leading-snug">${DiffViewer.escapeHtml(art1.Title || 'Untitled')}</div>
-        <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-          <span>${art1.Source}</span>
+      <td class="px-4 py-3.5">
+        <div class="font-bold text-slate-900 leading-snug">${DiffViewer.escapeHtml(art1.Title || 'Untitled')}</div>
+        <div class="text-[11px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+          <span class="text-emerald-700 font-bold">${art1.Source}</span>
           <span>&middot;</span>
           <span>${art1.Category || '-'}</span>
           <span>&middot;</span>
           <span>${art1["Date Posted"] || '-'}</span>
-          <a href="${art1.URL}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 hover:underline">Link ↗</a>
+          <a href="${art1.URL}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 font-semibold hover:underline">Link ↗</a>
         </div>
       </td>
-      <td class="px-4 py-3">
-        <div class="font-medium text-slate-900 leading-snug">${DiffViewer.escapeHtml(art2.Title || 'Untitled')}</div>
-        <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-          <span>${art2.Source}</span>
+      <td class="px-4 py-3.5">
+        <div class="font-bold text-slate-900 leading-snug">${DiffViewer.escapeHtml(art2.Title || 'Untitled')}</div>
+        <div class="text-[11px] text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+          <span class="text-sky-700 font-bold">${art2.Source}</span>
           <span>&middot;</span>
           <span>${art2.Category || '-'}</span>
           <span>&middot;</span>
           <span>${art2["Date Posted"] || '-'}</span>
-          <a href="${art2.URL}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 hover:underline">Link ↗</a>
+          <a href="${art2.URL}" target="_blank" rel="noopener noreferrer" class="text-slate-600 hover:text-slate-900 font-semibold hover:underline">Link ↗</a>
         </div>
       </td>
-      <td class="px-4 py-3 text-right whitespace-nowrap">
-        <button type="button" class="compare-btn px-2.5 py-1 text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded transition-colors">
-          Inspect Diff
+      <td class="px-4 py-3.5 text-right whitespace-nowrap">
+        <button type="button" class="compare-btn px-3 py-1.5 text-xs font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-200">
+          Compare
         </button>
       </td>
     `;
@@ -543,7 +561,6 @@ function renderPlagiarizedTable(pairs, articles) {
   });
 }
 
-// Within-Source Tables
 function renderWithinSourceTables(withinPairs, articles) {
   const container = document.getElementById("within-source-tables-container");
   if (!container) return;
@@ -552,17 +569,17 @@ function renderWithinSourceTables(withinPairs, articles) {
   [state.source1, state.source2].forEach(sourceName => {
     const pairs = withinPairs[sourceName] || [];
     const sec = document.createElement("div");
-    sec.className = "bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden";
+    sec.className = "bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs";
 
     sec.innerHTML = `
-      <div class="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-xs font-semibold text-slate-800">
-        <span>Internal Similar Articles: ${sourceName}</span>
-        <span class="text-[11px] font-normal text-slate-500">${pairs.length} detected</span>
+      <div class="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between text-xs font-bold text-slate-800">
+        <span>Similar Articles: ${sourceName}</span>
+        <span class="text-[11px] font-semibold text-slate-500">${pairs.length} found</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs text-slate-600">
           <tbody class="divide-y divide-slate-100">
-            ${pairs.length === 0 ? '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-400">No internal similar content found.</td></tr>' : ''}
+            ${pairs.length === 0 ? '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-400">No duplicate content found.</td></tr>' : ''}
           </tbody>
         </table>
       </div>
@@ -576,11 +593,11 @@ function renderWithinSourceTables(withinPairs, articles) {
       const row = document.createElement("tr");
       row.className = "hover:bg-slate-50 transition-colors";
       row.innerHTML = `
-        <td class="px-4 py-2.5 whitespace-nowrap font-medium text-slate-800">${pct}%</td>
-        <td class="px-4 py-2.5 font-medium text-slate-900">${DiffViewer.escapeHtml(art1.Title || 'Untitled')}</td>
-        <td class="px-4 py-2.5 font-medium text-slate-900">${DiffViewer.escapeHtml(art2.Title || 'Untitled')}</td>
-        <td class="px-4 py-2.5 text-right whitespace-nowrap">
-          <button type="button" class="btn-diff text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline">Inspect</button>
+        <td class="px-4 py-3 whitespace-nowrap font-bold text-slate-800">${pct}%</td>
+        <td class="px-4 py-3 font-semibold text-slate-900">${DiffViewer.escapeHtml(art1.Title || 'Untitled')}</td>
+        <td class="px-4 py-3 font-semibold text-slate-900">${DiffViewer.escapeHtml(art2.Title || 'Untitled')}</td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <button type="button" class="btn-diff text-xs font-bold text-emerald-700 hover:underline">Compare</button>
         </td>
       `;
       row.querySelector(".btn-diff")?.addEventListener("click", () => openDiffModal(art1, art2, p.score));
@@ -591,7 +608,6 @@ function renderWithinSourceTables(withinPairs, articles) {
   });
 }
 
-// Side-by-Side Diff Modal
 function openDiffModal(art1, art2, score) {
   const modal = document.getElementById("diff-modal");
   if (!modal) return;
@@ -663,7 +679,6 @@ function initQuickCompare() {
   });
 }
 
-// Custom Dataset Upload
 function initFileUpload() {
   const fileInput = document.getElementById("dataset-file-input");
   fileInput?.addEventListener("change", (e) => {
@@ -722,12 +737,12 @@ function showToast(message, type = "info") {
 
   const bgColors = {
     info: "bg-slate-900 text-white",
-    success: "bg-emerald-700 text-white",
-    warning: "bg-amber-700 text-white",
-    error: "bg-red-700 text-white"
+    success: "bg-[#2e7d32] text-white",
+    warning: "bg-amber-600 text-white",
+    error: "bg-red-600 text-white"
   };
 
-  toast.className = `fixed bottom-4 right-4 z-50 px-3.5 py-2 rounded-lg shadow-md transition-all duration-300 transform font-medium text-xs flex items-center gap-2 ${bgColors[type] || bgColors.info}`;
+  toast.className = `fixed bottom-4 right-4 z-50 px-4 py-2.5 rounded-2xl shadow-lg transition-all duration-300 transform font-bold text-xs flex items-center gap-2 ${bgColors[type] || bgColors.info}`;
   toast.innerHTML = `<span>${message}</span>`;
   toast.classList.remove("translate-y-16", "opacity-0");
 
