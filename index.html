@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Plagiarism Checker — Media Integrity Analysis</title>
+  <meta name="description" content="Automated news plagiarism detection and similarity analysis across Ghanaian news portals.">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex flex-col font-sans">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-white border-b border-slate-200/80 sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex justify-between items-center h-14">
+        
+        <!-- Brand / Title (No emojis) -->
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs tracking-wider">
+            NP
+          </div>
+          <div>
+            <h1 class="text-sm font-semibold text-slate-900 leading-none">News Plagiarism Checker</h1>
+            <p class="text-[11px] text-slate-500 font-normal mt-0.5">Media Integrity Analysis</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs (Clean text, zero emojis) -->
+        <nav class="hidden md:flex space-x-1">
+          <button class="nav-tab active px-3 py-1.5 text-xs font-medium text-slate-900 rounded-md bg-slate-100 transition-colors" data-tab="analysis">
+            Source Comparison
+          </button>
+          <button class="nav-tab px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-md hover:bg-slate-50 transition-colors" data-tab="quick-compare">
+            Text Compare
+          </button>
+          <button class="nav-tab px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-md hover:bg-slate-50 transition-colors" data-tab="upload">
+            Dataset
+          </button>
+          <button class="nav-tab px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-md hover:bg-slate-50 transition-colors" data-tab="about">
+            Methodology
+          </button>
+        </nav>
+
+        <!-- Right Side Links -->
+        <div class="flex items-center space-x-3">
+          <a href="https://github.com/hubert78/news-plagiarism-checker" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            <span>Repository</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Sub-Navigation -->
+  <div class="md:hidden bg-white border-b border-slate-200 px-4 py-2 flex space-x-2 overflow-x-auto">
+    <button class="nav-tab active text-xs font-medium px-2.5 py-1 rounded bg-slate-100 text-slate-900 whitespace-nowrap" data-tab="analysis">Comparison</button>
+    <button class="nav-tab text-xs font-medium px-2.5 py-1 rounded text-slate-600 whitespace-nowrap" data-tab="quick-compare">Text Compare</button>
+    <button class="nav-tab text-xs font-medium px-2.5 py-1 rounded text-slate-600 whitespace-nowrap" data-tab="upload">Dataset</button>
+    <button class="nav-tab text-xs font-medium px-2.5 py-1 rounded text-slate-600 whitespace-nowrap" data-tab="about">Methodology</button>
+  </div>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: SOURCE COMPARISON                   -->
+    <!-- ========================================== -->
+    <div id="tab-analysis" class="tab-content space-y-6">
+
+      <!-- Header Intro -->
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 tracking-tight">Article Similarity & Plagiarism Monitor</h2>
+        <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+          Compare news articles between Ghanaian news websites to measure editorial duplication, detect uncredited copy-pasting, and inspect text overlaps.
+        </p>
+      </div>
+
+      <!-- Main Controls Card -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
+        
+        <!-- Source Selection Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          
+          <!-- Source 1 -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <label for="source-1-select" class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Source 1</label>
+              <span id="s1-stats-badge" class="text-[11px] text-slate-500">Ready</span>
+            </div>
+            <select id="source-1-select" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"></select>
+
+            <!-- Date Range -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="block text-[10px] font-medium text-slate-500 mb-1">Start Date</span>
+                <input type="date" id="s1-start-date" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:bg-white focus:outline-none">
+              </div>
+              <div>
+                <span class="block text-[10px] font-medium text-slate-500 mb-1">End Date</span>
+                <input type="date" id="s1-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:bg-white focus:outline-none">
+              </div>
+            </div>
+
+            <!-- Categories -->
+            <div>
+              <span class="block text-[10px] font-medium text-slate-500 mb-1.5">Categories</span>
+              <div id="s1-categories-container" class="flex flex-wrap gap-1"></div>
+            </div>
+          </div>
+
+          <!-- Source 2 -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <label for="source-2-select" class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Source 2</label>
+              <span id="s2-stats-badge" class="text-[11px] text-slate-500">Ready</span>
+            </div>
+            <select id="source-2-select" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"></select>
+
+            <!-- Date Range -->
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="block text-[10px] font-medium text-slate-500 mb-1">Start Date</span>
+                <input type="date" id="s2-start-date" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:bg-white focus:outline-none">
+              </div>
+              <div>
+                <span class="block text-[10px] font-medium text-slate-500 mb-1">End Date</span>
+                <input type="date" id="s2-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:bg-white focus:outline-none">
+              </div>
+            </div>
+
+            <!-- Categories -->
+            <div>
+              <span class="block text-[10px] font-medium text-slate-500 mb-1.5">Categories</span>
+              <div id="s2-categories-container" class="flex flex-wrap gap-1"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Action Bar: Scraping Mode, Slider & Run Button -->
+        <div class="pt-4 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
+          
+          <!-- Scraping Mode Toggle -->
+          <div class="flex items-center gap-2 w-full md:w-auto">
+            <span class="text-xs font-medium text-slate-600">Data Source:</span>
+            <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs">
+              <button type="button" id="mode-archive-btn" class="px-2.5 py-1 rounded-md font-medium bg-white text-slate-900 shadow-xs transition-colors">
+                Archived Dataset
+              </button>
+              <button type="button" id="mode-scrape-btn" class="px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-900 transition-colors">
+                Live Web Scraper
+              </button>
+            </div>
+          </div>
+
+          <!-- Threshold Slider -->
+          <div class="flex items-center gap-3 w-full md:w-64">
+            <span class="text-xs font-medium text-slate-600 whitespace-nowrap">Threshold:</span>
+            <input type="range" id="threshold-slider" min="35" max="100" value="70" class="w-full">
+            <span id="threshold-value" class="text-xs font-semibold text-slate-900 min-w-[32px] text-right">70%</span>
+          </div>
+
+          <!-- Run Button -->
+          <button id="run-check-btn" type="button" class="w-full md:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition-colors flex items-center justify-center gap-2">
+            <span id="btn-label">Run Plagiarism Check</span>
+            <svg id="btn-spinner" class="hidden animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- Live Scraper Activity Log / Terminal -->
+      <div id="live-terminal" class="hidden rounded-xl border border-slate-800 overflow-hidden shadow-xs">
+        <div class="bg-slate-900 px-3.5 py-2 flex items-center justify-between border-b border-slate-800 text-[11px] text-slate-400">
+          <span class="font-mono text-slate-300">Live Scraper Console</span>
+          <span id="scraper-status-indicator" class="inline-flex items-center gap-1.5 text-emerald-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+            Active
+          </span>
+        </div>
+        <div id="terminal-logs" class="terminal-box p-3.5 text-[11px] text-slate-300 max-h-44 overflow-y-auto space-y-1">
+          <!-- Live logs injected here -->
+        </div>
+      </div>
+
+      <!-- No Results / Alert Banner -->
+      <div id="no-results-banner" class="hidden bg-slate-100 border border-slate-200 text-slate-700 px-4 py-3 rounded-lg text-xs">
+        <p></p>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- RESULTS DASHBOARD                          -->
+      <!-- ========================================== -->
+      <div id="analysis-results" class="hidden space-y-5">
+        
+        <!-- Metric Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+            <span class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider">Plagiarized Pairs</span>
+            <div id="metric-pairs-count" class="text-2xl font-bold text-slate-900 mt-1">0</div>
+            <p id="metric-pairs-desc" class="text-[11px] text-slate-500 mt-0.5">Above selected threshold</p>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+            <span class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider" id="metric-s1-title">Source 1 Duplication</span>
+            <div id="metric-s1-rate" class="text-2xl font-bold text-slate-900 mt-1">0%</div>
+            <p id="metric-s1-desc" class="text-[11px] text-slate-500 mt-0.5">Articles sharing content</p>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+            <span class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider" id="metric-s2-title">Source 2 Duplication</span>
+            <div id="metric-s2-rate" class="text-2xl font-bold text-slate-900 mt-1">0%</div>
+            <p id="metric-s2-desc" class="text-[11px] text-slate-500 mt-0.5">Articles sharing content</p>
+          </div>
+        </div>
+
+        <!-- Segmented Results View Selector -->
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+          <div class="flex space-x-1">
+            <button type="button" class="res-tab active px-3 py-1.5 text-xs font-semibold text-slate-900 border-b-2 border-slate-900" data-view="table">
+              Detected Pairs (<span id="tab-pairs-badge">0</span>)
+            </button>
+            <button type="button" class="res-tab px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent" data-view="charts">
+              Visual Charts
+            </button>
+            <button type="button" class="res-tab px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 border-b-2 border-transparent" data-view="duplicates">
+              Internal Duplicates
+            </button>
+          </div>
+        </div>
+
+        <!-- VIEW 1: Detected Pairs Table -->
+        <div id="view-table" class="res-view bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-600">
+              <thead class="bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                <tr>
+                  <th class="px-4 py-3">Score</th>
+                  <th class="px-4 py-3">Source 1 Article</th>
+                  <th class="px-4 py-3">Source 2 Article</th>
+                  <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="plagiarism-table-body" class="divide-y divide-slate-100">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- VIEW 2: Visual Charts -->
+        <div id="view-charts" class="res-view hidden space-y-5">
+          
+          <!-- Proportion Donut Charts -->
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+            <h3 class="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-4">Proportion of Plagiarized Articles</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-60">
+              <div class="relative h-full"><canvas id="chart-proportion-s1"></canvas></div>
+              <div class="relative h-full"><canvas id="chart-proportion-s2"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Category Breakdown Bar Charts -->
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+            <h3 class="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-4">Most Plagiarized News Categories</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-60">
+              <div class="relative h-full"><canvas id="chart-categories-s1"></canvas></div>
+              <div class="relative h-full"><canvas id="chart-categories-s2"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Timeline Dates Bar Charts -->
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+            <h3 class="text-xs font-semibold text-slate-900 uppercase tracking-wider mb-4">Plagiarism Frequency by Date</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-60">
+              <div class="relative h-full"><canvas id="chart-dates-s1"></canvas></div>
+              <div class="relative h-full"><canvas id="chart-dates-s2"></canvas></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- VIEW 3: Internal Duplicates -->
+        <div id="view-duplicates" class="res-view hidden space-y-4">
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <h4 class="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-3">Similar Content (Different URLs)</h4>
+              <div class="grid grid-cols-2 gap-2 h-44">
+                <div class="relative h-full"><canvas id="chart-similar-s1"></canvas></div>
+                <div class="relative h-full"><canvas id="chart-similar-s2"></canvas></div>
+              </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <h4 class="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-3">Duplicate URLs</h4>
+              <div class="grid grid-cols-2 gap-2 h-44">
+                <div id="dup-url-s1-container" class="relative h-full"><canvas id="chart-dup-s1"></canvas></div>
+                <div id="dup-url-s2-container" class="relative h-full"><canvas id="chart-dup-s2"></canvas></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="within-source-tables-container" class="space-y-4"></div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: QUICK TEXT COMPARE PLAYGROUND       -->
+    <!-- ========================================== -->
+    <div id="tab-quick-compare" class="tab-content hidden space-y-5 max-w-4xl mx-auto">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900">Direct Text Comparison</h2>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Paste two news articles or paragraphs to compute their mathematical TF-IDF cosine similarity score and highlight shared phrases.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Article Text A</label>
+          <textarea id="quick-text-a" rows="9" placeholder="Paste article content here..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"></textarea>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Article Text B</label>
+          <textarea id="quick-text-b" rows="9" placeholder="Paste article content here..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end">
+        <button id="quick-compare-btn" type="button" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition-colors">
+          Compare Texts
+        </button>
+      </div>
+
+      <!-- Quick Compare Result Box -->
+      <div id="quick-result-box" class="hidden bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <span class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Similarity Score</span>
+          <span id="quick-score-text" class="text-xl font-bold text-slate-900">0.00%</span>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+          <div id="quick-gauge-bar" class="h-full bg-slate-900 rounded-full" style="width: 0%"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-xs">
+          <div>
+            <h4 class="font-medium text-slate-500 mb-1">Text A Overlaps</h4>
+            <div id="quick-diff-a" class="bg-slate-50 p-3 rounded-lg leading-relaxed text-slate-800 max-h-48 overflow-y-auto"></div>
+          </div>
+          <div>
+            <h4 class="font-medium text-slate-500 mb-1">Text B Overlaps</h4>
+            <div id="quick-diff-b" class="bg-slate-50 p-3 rounded-lg leading-relaxed text-slate-800 max-h-48 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: DATASET MANAGEMENT                  -->
+    <!-- ========================================== -->
+    <div id="tab-upload" class="tab-content hidden max-w-2xl mx-auto space-y-5">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900">Dataset Management</h2>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Import scraped articles in JSON or CSV format or download the current working dataset.
+        </p>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-xs text-center space-y-4">
+        <div class="text-xs text-slate-600">
+          Upload custom news articles. Files are processed locally in your browser.
+        </div>
+        <label for="dataset-file-input" class="cursor-pointer inline-flex items-center px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition-colors">
+          Select JSON / CSV File
+        </label>
+        <input type="file" id="dataset-file-input" accept=".json,.csv" class="hidden">
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs text-slate-600 space-y-1.5">
+        <span class="font-semibold text-slate-800">Required Columns:</span>
+        <code class="block bg-white p-2.5 rounded border border-slate-200 text-slate-800 font-mono text-[11px]">
+          ["Source", "Category", "Date Posted", "Title", "URL", "Content"]
+        </code>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: METHODOLOGY                         -->
+    <!-- ========================================== -->
+    <div id="tab-about" class="tab-content hidden max-w-3xl mx-auto space-y-5">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-xs p-6 space-y-5 text-xs text-slate-600 leading-relaxed">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Problem Statement & Methodology</h2>
+          <p class="mt-2">
+            In digital journalism, the pressure to publish breaking stories often causes newsrooms to republish competitor reporting, government agency press releases, and wire stories with minimal editing or source attribution. This project evaluates duplication across five prominent Ghanaian news portals: <strong>Ghanaweb, 3News, MyJoyOnline, Modern Ghana, and Yen Ghana</strong>.
+          </p>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100">
+          <h3 class="text-sm font-semibold text-slate-900 mb-2">Detection Pipeline</h3>
+          <ol class="list-decimal pl-4 space-y-1.5">
+            <li><strong>Text Sanitization</strong>: Removal of HTML tags, punctuation, and non-alphabetic characters.</li>
+            <li><strong>Stopword Filtering & Stemming</strong>: Removal of standard English stopwords (179 words) and morphological reduction via Porter Stemming.</li>
+            <li><strong>TF-IDF Vectorization</strong>: Term Frequency - Inverse Document Frequency vector computation with smoothed IDF and L2 vector normalization.</li>
+            <li><strong>Cosine Similarity</strong>: Pairwise vector dot products generating symmetric similarity scores between 0.0 and 1.0.</li>
+          </ol>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100">
+          <h3 class="text-sm font-semibold text-slate-900 mb-1">Architecture</h3>
+          <p>
+            The web client is completely static and deployable directly on GitHub Pages. When running locally via <code>python server.py</code>, it can trigger the native Python scrapers in <code>scraper.py</code>. When hosted on GitHub Pages, it leverages client-side proxy scraping or GitHub Actions workflows.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- SIDE-BY-SIDE DIFF MODAL                    -->
+  <!-- ========================================== -->
+  <div id="diff-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-4xl w-full max-h-[88vh] flex flex-col overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span id="modal-score-badge" class="px-2 py-0.5 rounded text-xs font-semibold bg-slate-900 text-white">
+            0% Similarity
+          </span>
+          <span class="text-xs font-semibold text-slate-700">Side-by-Side Comparison</span>
+        </div>
+        <button id="close-modal-btn" type="button" class="text-slate-400 hover:text-slate-700 text-sm p-1 rounded transition-colors">
+          ✕
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 overflow-y-auto flex-grow grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+        
+        <!-- Article 1 -->
+        <div class="border border-slate-200 rounded-lg p-4 flex flex-col">
+          <div class="border-b border-slate-100 pb-2 mb-2">
+            <span id="modal-source1-label" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Source 1</span>
+            <h4 id="modal-title1" class="font-semibold text-slate-900 text-xs mt-0.5 leading-snug"></h4>
+            <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+              <span id="modal-stats1"></span>
+              <a id="modal-url1" href="#" target="_blank" rel="noopener noreferrer" class="text-slate-900 hover:underline">Original Article ↗</a>
+            </div>
+          </div>
+          <div id="modal-content1" class="leading-relaxed text-slate-700 space-y-2 overflow-y-auto max-h-[46vh] pr-1"></div>
+        </div>
+
+        <!-- Article 2 -->
+        <div class="border border-slate-200 rounded-lg p-4 flex flex-col">
+          <div class="border-b border-slate-100 pb-2 mb-2">
+            <span id="modal-source2-label" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Source 2</span>
+            <h4 id="modal-title2" class="font-semibold text-slate-900 text-xs mt-0.5 leading-snug"></h4>
+            <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+              <span id="modal-stats2"></span>
+              <a id="modal-url2" href="#" target="_blank" rel="noopener noreferrer" class="text-slate-900 hover:underline">Original Article ↗</a>
+            </div>
+          </div>
+          <div id="modal-content2" class="leading-relaxed text-slate-700 space-y-2 overflow-y-auto max-h-[46vh] pr-1"></div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-2.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500">
+        <span>Highlighted passages indicate overlapping sentence structures.</span>
+        <button onclick="document.getElementById('diff-modal').classList.add('hidden'); document.body.style.overflow='';" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded font-medium text-xs transition-colors">
+          Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="app-toast" class="fixed bottom-4 right-4 z-50 px-3.5 py-2 rounded-lg shadow-md transition-all duration-300 transform translate-y-16 opacity-0 font-medium text-xs flex items-center gap-2"></div>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-4 mt-8">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 text-center text-[11px] text-slate-400">
+      News Plagiarism Checker &middot; Ghanaian Digital Media Integrity Analysis &middot; Deployable on GitHub Pages
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="./js/nlp.js"></script>
+  <script src="./js/scraper.js"></script>
+  <script src="./js/charts.js"></script>
+  <script src="./js/diff.js"></script>
+  <script src="./js/app.js"></script>
+
+</body>
+</html>
